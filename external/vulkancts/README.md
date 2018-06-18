@@ -26,7 +26,7 @@ Requirements
 
 ### Android
 
- * Android NDK r15c or later. NDK r11c still works but will be deprecated soon.
+ * Android NDK r15c or later.
  * Android SDK with: SDK Tools, SDK Platform-tools, SDK Build-tools, and API 22
  * Java Development Kit (JDK)
  * Windows: either NMake or Ninja in PATH
