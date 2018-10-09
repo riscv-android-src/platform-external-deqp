@@ -91,6 +91,10 @@ public class DeqpTestRunner implements IBuildReceiver, IDeviceTest,
     private static final int TESTCASE_BATCH_LIMIT = 1000;
     private static final int UNRESPONSIVE_CMD_TIMEOUT_MS = 10 * 60 * 1000; // 10min
 
+    private static final String ANGLE_NONE = "none";
+    private static final String ANGLE_VULKAN = "vulkan";
+    private static final String ANGLE_OPENGLES = "opengles";
+
     // !NOTE: There's a static method copyOptions() for copying options during split.
     // If you add state update copyOptions() as appropriate!
 
@@ -139,6 +143,11 @@ public class DeqpTestRunner implements IBuildReceiver, IDeviceTest,
             isTimeVal = true,
             description="The estimated config runtime. Defaults to 200ms x num tests.")
     private long mRuntimeHint = -1;
+
+    @Option(name="deqp-use-angle",
+            description="ANGLE backend ('none', 'vulkan', 'opengles'). Defaults to 'none' (don't use ANGLE)",
+            importance=Option.Importance.NEVER)
+    private String mAngle = "none";
 
     private Collection<TestDescription> mRemainingTests = null;
     private Map<TestDescription, Set<BatchRunConfiguration>> mTestInstances = null;
@@ -2031,6 +2040,66 @@ public class DeqpTestRunner implements IBuildReceiver, IDeviceTest,
     }
 
     /**
+     * Set up the test environment.
+     */
+    private void setupTestEnvironment() throws DeviceNotAvailableException {
+        try {
+            // Get the system into a known state.
+            // FIXME -- b/115906203 -- Skia Vulkan workaround
+            mDevice.executeShellCommand("setprop debug.hwui.renderer none");
+            // Force dEQP to use ANGLE
+            mDevice.executeShellCommand("settings put global angle_enabled_app none");
+
+            // ANGLE
+            if (mAngle.equals(ANGLE_VULKAN)) {
+                CLog.i("Configuring ANGLE to use: " + mAngle);
+                // FIXME -- b/115906203 -- Skia Vulkan workaround
+                mDevice.executeShellCommand("setprop debug.hwui.renderer skiavk");
+                // Force dEQP to use ANGLE
+                mDevice.executeShellCommand("settings put global angle_enabled_app "
+                    + DEQP_ONDEVICE_PKG);
+                // Configure ANGLE to use Vulkan
+                mDevice.executeShellCommand("setprop debug.angle.backend 2");
+            } else if (mAngle.equals(ANGLE_OPENGLES)) {
+                CLog.i("Configuring ANGLE to use: " + mAngle);
+                // Force dEQP to use ANGLE
+                mDevice.executeShellCommand("settings put global angle_enabled_app "
+                    + DEQP_ONDEVICE_PKG);
+                // Configure ANGLE to use Vulkan
+                mDevice.executeShellCommand("setprop debug.angle.backend 0");
+            }
+        } catch (DeviceNotAvailableException ex) {
+            // chain forward
+            CLog.e("Failed to set up ANGLE correctly.");
+            throw new DeviceNotAvailableException("Device not available",
+                mDevice.getSerialNumber());
+        }
+    }
+
+    /**
+     * Clean up the test environment.
+     */
+    private void teardownTestEnvironment() throws DeviceNotAvailableException {
+        // ANGLE
+        try {
+            if (!mAngle.equals(ANGLE_NONE)) {
+                CLog.i("Cleaning up ANGLE");
+                if (mAngle.equals(ANGLE_VULKAN)) {
+                    // FIXME -- b/115906203 -- Undo Skia Vulkan workaround
+                    mDevice.executeShellCommand("setprop debug.hwui.renderer none");
+                }
+                // Stop forcing dEQP to use ANGLE
+                mDevice.executeShellCommand("settings put global angle_enabled_app none");
+            }
+        } catch (DeviceNotAvailableException ex) {
+            // chain forward
+            CLog.e("Failed to clean up ANGLE correctly.");
+            throw new DeviceNotAvailableException("Device not available",
+                mDevice.getSerialNumber());
+        }
+    }
+
+    /**
      * {@inheritDoc}
      */
     @Override
@@ -2065,7 +2134,9 @@ public class DeqpTestRunner implements IBuildReceiver, IDeviceTest,
 
                 mInstanceListerner.setSink(listener);
                 mDeviceRecovery.setDevice(mDevice);
+                setupTestEnvironment();
                 runTests();
+                teardownTestEnvironment();
 
                 uninstallTestApk();
             }
@@ -2166,6 +2237,7 @@ public class DeqpTestRunner implements IBuildReceiver, IDeviceTest,
         destination.mAbi = source.mAbi;
         destination.mLogData = source.mLogData;
         destination.mCollectTestsOnly = source.mCollectTestsOnly;
+        destination.mAngle = source.mAngle;
     }
 
     /**
