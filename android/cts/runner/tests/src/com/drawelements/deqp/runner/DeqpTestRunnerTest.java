@@ -230,6 +230,11 @@ public class DeqpTestRunnerTest extends TestCase {
                     EasyMock.eq(AbiUtils.createAbiFlag(ABI.getName()))))
                     .andReturn(null).once();
 
+            EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("setprop debug.hwui.renderer none"))).
+                andReturn("").once();
+            EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("settings put global angle_enabled_app none"))).
+                andReturn("").once();
+
             expectRenderConfigQuery(mockDevice, requiredMajorVersion,
                     requiredMinorVersion);
 
@@ -383,6 +388,11 @@ public class DeqpTestRunnerTest extends TestCase {
 
         mockListener.testRunStarted(getTestId(deqpTest), 1);
         EasyMock.expectLastCall().once();
+
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("setprop debug.hwui.renderer none"))).
+            andReturn("").once();
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("settings put global angle_enabled_app none"))).
+            andReturn("").once();
 
         mockListener.testStarted(EasyMock.eq(testId));
         EasyMock.expectLastCall().once();
@@ -550,6 +560,11 @@ public class DeqpTestRunnerTest extends TestCase {
         mockListener.testRunStarted(getTestId(deqpTest), testPaths.length);
         EasyMock.expectLastCall().once();
 
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("setprop debug.hwui.renderer none"))).
+            andReturn("").once();
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("settings put global angle_enabled_app none"))).
+            andReturn("").once();
+
         for (int i = 0; i < testPaths.length; i++) {
             mockListener.testStarted(EasyMock.eq(testIds[i]));
             EasyMock.expectLastCall().once();
@@ -641,6 +656,11 @@ public class DeqpTestRunnerTest extends TestCase {
                 = EasyMock.createStrictMock(ITestInvocationListener.class);
         mockListener.testRunStarted(getTestId(deqpTest), expectedTests.size());
         EasyMock.expectLastCall().once();
+
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("setprop debug.hwui.renderer none"))).
+            andReturn("").once();
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("settings put global angle_enabled_app none"))).
+            andReturn("").once();
 
         IDevice mockIDevice = EasyMock.createMock(IDevice.class);
         if (thereAreTests)
@@ -811,6 +831,7 @@ public class DeqpTestRunnerTest extends TestCase {
                 = EasyMock.createStrictMock(ITestInvocationListener.class);
         mockListener.testRunStarted(getTestId(deqpTest), 0);
         EasyMock.expectLastCall().once();
+
         mockListener.testRunEnded(EasyMock.anyLong(), EasyMock.<Map<String, String>>notNull());
         EasyMock.expectLastCall().once();
 
@@ -904,6 +925,11 @@ public class DeqpTestRunnerTest extends TestCase {
         mockListener.testRunStarted(getTestId(deqpTest), testPaths.length);
         EasyMock.expectLastCall().once();
 
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("setprop debug.hwui.renderer none"))).
+            andReturn("").once();
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("settings put global angle_enabled_app none"))).
+            andReturn("").once();
+
         for (int i = 0; i < testPaths.length; i++) {
             mockListener.testStarted(EasyMock.eq(testIds[i]));
             EasyMock.expectLastCall().once();
@@ -975,6 +1001,11 @@ public class DeqpTestRunnerTest extends TestCase {
         mockListener.testRunStarted(getTestId(deqpTest), 1);
         EasyMock.expectLastCall().once();
 
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("setprop debug.hwui.renderer none"))).
+            andReturn("").once();
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("settings put global angle_enabled_app none"))).
+            andReturn("").once();
+
         mockListener.testRunEnded(EasyMock.anyLong(), EasyMock.<Map<String, String>>notNull());
         EasyMock.expectLastCall().once();
 
@@ -1027,6 +1058,11 @@ public class DeqpTestRunnerTest extends TestCase {
 
         mockListener.testRunStarted(getTestId(deqpTest), 1);
         EasyMock.expectLastCall().once();
+
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("setprop debug.hwui.renderer none"))).
+            andReturn("").once();
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("settings put global angle_enabled_app none"))).
+            andReturn("").once();
 
         mockListener.testRunEnded(EasyMock.anyLong(), EasyMock.<Map<String, String>>notNull());
         EasyMock.expectLastCall().once();
@@ -1140,6 +1176,11 @@ public class DeqpTestRunnerTest extends TestCase {
 
         mockListener.testRunStarted(getTestId(deqpTest), 1);
         EasyMock.expectLastCall().once();
+
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("setprop debug.hwui.renderer none"))).
+            andReturn("").once();
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("settings put global angle_enabled_app none"))).
+            andReturn("").once();
 
         mockListener.testStarted(EasyMock.eq(testId));
         EasyMock.expectLastCall().once();
@@ -1360,6 +1401,11 @@ public class DeqpTestRunnerTest extends TestCase {
 
         mockListener.testRunStarted(getTestId(deqpTest), 1);
         EasyMock.expectLastCall().once();
+
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("setprop debug.hwui.renderer none"))).
+            andReturn("").once();
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("settings put global angle_enabled_app none"))).
+            andReturn("").once();
 
         mockListener.testStarted(EasyMock.eq(testId));
         EasyMock.expectLastCall().once();
@@ -1726,6 +1772,12 @@ public class DeqpTestRunnerTest extends TestCase {
 
         mockListener.testRunStarted(getTestId(deqpTest), 1);
         EasyMock.expectLastCall().once();
+
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("setprop debug.hwui.renderer none"))).
+            andReturn("").once();
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("settings put global angle_enabled_app none"))).
+            andReturn("").once();
+
         mockListener.testRunEnded(EasyMock.anyLong(), (Map<String, String>) EasyMock.anyObject());
         EasyMock.expectLastCall().once();
 
@@ -1773,6 +1825,11 @@ public class DeqpTestRunnerTest extends TestCase {
 
             mockListener.testRunStarted(getTestId(shard), shardTests.size());
             EasyMock.expectLastCall().once();
+
+            EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("setprop debug.hwui.renderer none"))).
+                andReturn("").once();
+            EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("settings put global angle_enabled_app none"))).
+                andReturn("").once();
 
             expectRenderConfigQuery(mockDevice, 3, 0);
 
@@ -1936,6 +1993,11 @@ public class DeqpTestRunnerTest extends TestCase {
         mockListener.testRunStarted(getTestId(deqpTest), 1);
         EasyMock.expectLastCall().once();
 
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("setprop debug.hwui.renderer none"))).
+            andReturn("").once();
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("settings put global angle_enabled_app none"))).
+            andReturn("").once();
+
         mockListener.testStarted(EasyMock.eq(testId));
         EasyMock.expectLastCall().once();
 
@@ -2097,6 +2159,11 @@ public class DeqpTestRunnerTest extends TestCase {
 
         mockListener.testRunStarted(getTestId(deqpTest), testPaths.length);
         EasyMock.expectLastCall().once();
+
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("setprop debug.hwui.renderer none"))).
+            andReturn("").once();
+        EasyMock.expect(mockDevice.executeShellCommand(EasyMock.eq("settings put global angle_enabled_app none"))).
+            andReturn("").once();
 
         for (int i = 0; i < testPaths.length; i++) {
             mockListener.testStarted(EasyMock.eq(testIds[i]));
