@@ -1,1 +1,4 @@
 # Tests to be temporarily skipped for Android CI, but still enforced in CTS.
+
+# b/117510537: Host memory exhaustion for hardware buffers
+dEQP-VK.api.external.memory.android_hardware_buffer.image_formats.*
