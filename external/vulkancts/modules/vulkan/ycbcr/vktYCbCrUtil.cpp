@@ -26,6 +26,7 @@
 #include "vkQueryUtil.hpp"
 #include "vkRefUtil.hpp"
 #include "vkTypeUtil.hpp"
+#include "vkCmdUtil.hpp"
 
 #include "tcuTextureUtil.hpp"
 #include "deMath.h"
@@ -332,17 +333,7 @@ void uploadImage (const DeviceInterface&		vkd,
 
 	allocateAndWriteStagingBuffers(vkd, device, allocator, imageData, &stagingBuffers, &stagingMemory);
 
-	{
-		const VkCommandBufferBeginInfo	beginInfo		=
-		{
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			DE_NULL,
-			(VkCommandBufferUsageFlags)VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-			(const VkCommandBufferInheritanceInfo*)DE_NULL
-		};
-
-		VK_CHECK(vkd.beginCommandBuffer(*cmdBuffer, &beginInfo));
-	}
+	beginCommandBuffer(vkd, *cmdBuffer);
 
 	{
 		const VkImageMemoryBarrier		preCopyBarrier	=
@@ -422,26 +413,9 @@ void uploadImage (const DeviceInterface&		vkd,
 								&postCopyBarrier);
 	}
 
-	VK_CHECK(vkd.endCommandBuffer(*cmdBuffer));
+	endCommandBuffer(vkd, *cmdBuffer);
 
-	{
-		const Unique<VkFence>	fence		(createFence(vkd, device));
-		const VkSubmitInfo		submitInfo	=
-		{
-			VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			DE_NULL,
-			0u,
-			(const VkSemaphore*)DE_NULL,
-			(const VkPipelineStageFlags*)DE_NULL,
-			1u,
-			&*cmdBuffer,
-			0u,
-			(const VkSemaphore*)DE_NULL,
-		};
-
-		VK_CHECK(vkd.queueSubmit(queue, 1u, &submitInfo, *fence));
-		VK_CHECK(vkd.waitForFences(device, 1u, &*fence, VK_TRUE, ~0ull));
-	}
+	submitCommandsAndWait(vkd, device, queue, *cmdBuffer);
 }
 
 void fillImageMemory (const vk::DeviceInterface&							vkd,
@@ -489,18 +463,7 @@ void fillImageMemory (const vk::DeviceInterface&							vkd,
 		flushMappedMemoryRange(vkd, device, allocation->getMemory(), 0u, VK_WHOLE_SIZE);
 	}
 
-	{
-		const VkCommandBufferBeginInfo	beginInfo		=
-		{
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			DE_NULL,
-			(VkCommandBufferUsageFlags)VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-			(const VkCommandBufferInheritanceInfo*)DE_NULL
-		};
-
-		VK_CHECK(vkd.beginCommandBuffer(*cmdBuffer, &beginInfo));
-	}
-
+	beginCommandBuffer(vkd, *cmdBuffer);
 
 	{
 		const VkImageMemoryBarrier		postCopyBarrier	=
@@ -529,26 +492,9 @@ void fillImageMemory (const vk::DeviceInterface&							vkd,
 								&postCopyBarrier);
 	}
 
-	VK_CHECK(vkd.endCommandBuffer(*cmdBuffer));
+	endCommandBuffer(vkd, *cmdBuffer);
 
-	{
-		const Unique<VkFence>	fence		(createFence(vkd, device));
-		const VkSubmitInfo		submitInfo	=
-		{
-			VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			DE_NULL,
-			0u,
-			(const VkSemaphore*)DE_NULL,
-			(const VkPipelineStageFlags*)DE_NULL,
-			1u,
-			&*cmdBuffer,
-			0u,
-			(const VkSemaphore*)DE_NULL,
-		};
-
-		VK_CHECK(vkd.queueSubmit(queue, 1u, &submitInfo, *fence));
-		VK_CHECK(vkd.waitForFences(device, 1u, &*fence, VK_TRUE, ~0ull));
-	}
+	submitCommandsAndWait(vkd, device, queue, *cmdBuffer);
 }
 
 void downloadImage (const DeviceInterface&	vkd,
@@ -570,17 +516,7 @@ void downloadImage (const DeviceInterface&	vkd,
 
 	allocateStagingBuffers(vkd, device, allocator, *imageData, &stagingBuffers, &stagingMemory);
 
-	{
-		const VkCommandBufferBeginInfo	beginInfo		=
-		{
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			DE_NULL,
-			(VkCommandBufferUsageFlags)VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-			(const VkCommandBufferInheritanceInfo*)DE_NULL
-		};
-
-		VK_CHECK(vkd.beginCommandBuffer(*cmdBuffer, &beginInfo));
-	}
+	beginCommandBuffer(vkd, *cmdBuffer);
 
 	for (deUint32 planeNdx = 0; planeNdx < imageData->getDescription().numPlanes; ++planeNdx)
 	{
@@ -665,26 +601,9 @@ void downloadImage (const DeviceInterface&	vkd,
 		}
 	}
 
-	VK_CHECK(vkd.endCommandBuffer(*cmdBuffer));
+	endCommandBuffer(vkd, *cmdBuffer);
 
-	{
-		const Unique<VkFence>	fence		(createFence(vkd, device));
-		const VkSubmitInfo		submitInfo	=
-		{
-			VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			DE_NULL,
-			0u,
-			(const VkSemaphore*)DE_NULL,
-			(const VkPipelineStageFlags*)DE_NULL,
-			1u,
-			&*cmdBuffer,
-			0u,
-			(const VkSemaphore*)DE_NULL,
-		};
-
-		VK_CHECK(vkd.queueSubmit(queue, 1u, &submitInfo, *fence));
-		VK_CHECK(vkd.waitForFences(device, 1u, &*fence, VK_TRUE, ~0ull));
-	}
+	submitCommandsAndWait(vkd, device, queue, *cmdBuffer);
 
 	readStagingBuffers(imageData, vkd, device, stagingMemory);
 }
@@ -703,17 +622,7 @@ void readImageMemory (const vk::DeviceInterface&							vkd,
 	const Unique<VkCommandBuffer>	cmdBuffer		(allocateCommandBuffer(vkd, device, *cmdPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY));
 	const PlanarFormatDescription&	formatDesc		= imageData->getDescription();
 
-	{
-		const VkCommandBufferBeginInfo	beginInfo		=
-		{
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			DE_NULL,
-			(VkCommandBufferUsageFlags)VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-			(const VkCommandBufferInheritanceInfo*)DE_NULL
-		};
-
-		VK_CHECK(vkd.beginCommandBuffer(*cmdBuffer, &beginInfo));
-	}
+	beginCommandBuffer(vkd, *cmdBuffer);
 
 	{
 		const VkImageMemoryBarrier		preCopyBarrier	=
@@ -742,26 +651,9 @@ void readImageMemory (const vk::DeviceInterface&							vkd,
 								&preCopyBarrier);
 	}
 
-	VK_CHECK(vkd.endCommandBuffer(*cmdBuffer));
+	endCommandBuffer(vkd, *cmdBuffer);
 
-	{
-		const Unique<VkFence>	fence		(createFence(vkd, device));
-		const VkSubmitInfo		submitInfo	=
-		{
-			VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			DE_NULL,
-			0u,
-			(const VkSemaphore*)DE_NULL,
-			(const VkPipelineStageFlags*)DE_NULL,
-			1u,
-			&*cmdBuffer,
-			0u,
-			(const VkSemaphore*)DE_NULL,
-		};
-
-		VK_CHECK(vkd.queueSubmit(queue, 1u, &submitInfo, *fence));
-		VK_CHECK(vkd.waitForFences(device, 1u, &*fence, VK_TRUE, ~0ull));
-	}
+	submitCommandsAndWait(vkd, device, queue, *cmdBuffer);
 
 	for (deUint32 planeNdx = 0; planeNdx < formatDesc.numPlanes; ++planeNdx)
 	{
@@ -1125,6 +1017,64 @@ bool isYChromaSubsampled (vk::VkFormat format)
 		default:
 			return false;
 	}
+}
+
+bool areLsb6BitsDontCare(vk::VkFormat srcFormat, vk::VkFormat dstFormat)
+{
+	if ((srcFormat == vk::VK_FORMAT_R10X6_UNORM_PACK16)	                        ||
+		(dstFormat == vk::VK_FORMAT_R10X6_UNORM_PACK16)                         ||
+		(srcFormat == vk::VK_FORMAT_R10X6G10X6_UNORM_2PACK16)                   ||
+		(dstFormat == vk::VK_FORMAT_R10X6G10X6_UNORM_2PACK16)                   ||
+		(srcFormat == vk::VK_FORMAT_R10X6G10X6B10X6A10X6_UNORM_4PACK16)         ||
+		(dstFormat == vk::VK_FORMAT_R10X6G10X6B10X6A10X6_UNORM_4PACK16)         ||
+		(srcFormat == vk::VK_FORMAT_G10X6B10X6G10X6R10X6_422_UNORM_4PACK16)     ||
+		(dstFormat == vk::VK_FORMAT_G10X6B10X6G10X6R10X6_422_UNORM_4PACK16)     ||
+		(srcFormat == vk::VK_FORMAT_B10X6G10X6R10X6G10X6_422_UNORM_4PACK16)     ||
+		(dstFormat == vk::VK_FORMAT_B10X6G10X6R10X6G10X6_422_UNORM_4PACK16)     ||
+		(srcFormat == vk::VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16)  ||
+		(dstFormat == vk::VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16)  ||
+		(srcFormat == vk::VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_420_UNORM_3PACK16) ||
+		(dstFormat == vk::VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_420_UNORM_3PACK16) ||
+		(srcFormat == vk::VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_422_UNORM_3PACK16) ||
+		(dstFormat == vk::VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_422_UNORM_3PACK16) ||
+		(srcFormat == vk::VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16)  ||
+		(dstFormat == vk::VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16)  ||
+		(srcFormat == vk::VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_444_UNORM_3PACK16) ||
+		(dstFormat == vk::VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_444_UNORM_3PACK16))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+bool areLsb4BitsDontCare(vk::VkFormat srcFormat, vk::VkFormat dstFormat)
+{
+	if ((srcFormat == vk::VK_FORMAT_R12X4_UNORM_PACK16)                         ||
+		(dstFormat == vk::VK_FORMAT_R12X4_UNORM_PACK16)                         ||
+		(srcFormat == vk::VK_FORMAT_R12X4G12X4_UNORM_2PACK16)                   ||
+		(dstFormat == vk::VK_FORMAT_R12X4G12X4_UNORM_2PACK16)                   ||
+		(srcFormat == vk::VK_FORMAT_R12X4G12X4B12X4A12X4_UNORM_4PACK16)         ||
+		(dstFormat == vk::VK_FORMAT_R12X4G12X4B12X4A12X4_UNORM_4PACK16)         ||
+		(srcFormat == vk::VK_FORMAT_G12X4B12X4G12X4R12X4_422_UNORM_4PACK16)     ||
+		(dstFormat == vk::VK_FORMAT_G12X4B12X4G12X4R12X4_422_UNORM_4PACK16)     ||
+		(srcFormat == vk::VK_FORMAT_B12X4G12X4R12X4G12X4_422_UNORM_4PACK16)     ||
+		(dstFormat == vk::VK_FORMAT_B12X4G12X4R12X4G12X4_422_UNORM_4PACK16)     ||
+		(srcFormat == vk::VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_420_UNORM_3PACK16) ||
+		(dstFormat == vk::VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_420_UNORM_3PACK16) ||
+		(srcFormat == vk::VK_FORMAT_G12X4_B12X4R12X4_2PLANE_420_UNORM_3PACK16)  ||
+		(dstFormat == vk::VK_FORMAT_G12X4_B12X4R12X4_2PLANE_420_UNORM_3PACK16)  ||
+		(srcFormat == vk::VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_422_UNORM_3PACK16) ||
+		(dstFormat == vk::VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_422_UNORM_3PACK16) ||
+		(srcFormat == vk::VK_FORMAT_G12X4_B12X4R12X4_2PLANE_422_UNORM_3PACK16)  ||
+		(dstFormat == vk::VK_FORMAT_G12X4_B12X4R12X4_2PLANE_422_UNORM_3PACK16)  ||
+		(srcFormat == vk::VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_444_UNORM_3PACK16) ||
+		(dstFormat == vk::VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_444_UNORM_3PACK16))
+	{
+		return true;
+	}
+
+	return false;
 }
 
 // \note Used for range expansion

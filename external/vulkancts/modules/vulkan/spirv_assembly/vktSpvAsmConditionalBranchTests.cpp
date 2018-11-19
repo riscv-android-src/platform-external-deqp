@@ -148,7 +148,6 @@ void addGraphicsSameLabelsTest (tcu::TestCaseGroup* group)
 
 		fragments["pre_main"]				=
 			"          %c_u32_128 = OpConstant %u32 128\n"
-			"                  %3 = OpTypeFunction %void\n"
 			"               %true = OpConstantTrue %bool\n"
 			"              %false = OpConstantFalse %bool\n"
 			" %_arr_uint_uint_128 = OpTypeArray %u32 %c_u32_128\n"
@@ -167,7 +166,7 @@ void addGraphicsSameLabelsTest (tcu::TestCaseGroup* group)
 			"                       OpDecorate %dataOutput Binding 0\n";
 
 		const StringTemplate	testFun		(
-			"          %test_code = OpFunction %v4f32 None %v4f32_function\n"
+			"          %test_code = OpFunction %v4f32 None %v4f32_v4f32_function\n"
 			"              %param = OpFunctionParameter %v4f32\n"
 
 			"              %entry = OpLabel\n"

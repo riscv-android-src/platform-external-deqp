@@ -36,6 +36,8 @@
 #include "vkBuilderUtil.hpp"
 #include "vkTypeUtil.hpp"
 #include "vkImageUtil.hpp"
+#include "vkCmdUtil.hpp"
+#include "vkObjUtil.hpp"
 
 #include "deUniquePtr.hpp"
 
@@ -582,11 +584,8 @@ tcu::TestStatus GridRenderTestInstance::iterate (void)
 
 	// Begin render pass
 	{
-		const VkRect2D renderArea = {
-			makeOffset2D(0, 0),
-			makeExtent2D(renderSize.x(), renderSize.y()),
-		};
-		const tcu::Vec4 clearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		const VkRect2D	renderArea	= makeRect2D(renderSize);
+		const tcu::Vec4	clearColor	(0.0f, 0.0f, 0.0f, 1.0f);
 
 		beginRenderPass(vk, *cmdBuffer, *renderPass, *framebuffer, renderArea, clearColor);
 	}

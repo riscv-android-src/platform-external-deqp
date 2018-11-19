@@ -34,6 +34,7 @@
 #include "vkRef.hpp"
 #include "vkRefUtil.hpp"
 #include "vkTypeUtil.hpp"
+#include "vkCmdUtil.hpp"
 
 #include "tcuTextureUtil.hpp"
 #include "tcuTexture.hpp"
@@ -545,7 +546,7 @@ tcu::TestStatus	BinaryAtomicInstanceBase::iterate (void)
 								m_resultImage->get(),
 								subresourceRange);
 
-	deviceInterface.cmdPipelineBarrier(*cmdBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, DE_FALSE, 0u, DE_NULL, 1u, &inputBufferPostHostWriteBarrier, 1u, &resultImagePreCopyBarrier);
+	deviceInterface.cmdPipelineBarrier(*cmdBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, DE_FALSE, 0u, DE_NULL, 1u, &inputBufferPostHostWriteBarrier, 1u, &resultImagePreCopyBarrier);
 
 	const VkBufferImageCopy		bufferImageCopyParams = makeBufferImageCopy(makeExtent3D(getLayerSize(m_imageType, m_imageSize)), getNumLayers(m_imageType, m_imageSize));
 

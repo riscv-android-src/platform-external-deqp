@@ -36,6 +36,7 @@
 #include "vkQueryUtil.hpp"
 #include "vkBuilderUtil.hpp"
 #include "vkTypeUtil.hpp"
+#include "vkCmdUtil.hpp"
 
 #include "deStringUtil.hpp"
 #include "deUniquePtr.hpp"
@@ -85,17 +86,6 @@ const std::string getCoordStr  (const ImageType		imageType,
 			DE_ASSERT(false);
 			return "";
 	}
-}
-
-tcu::UVec3 alignedDivide (const VkExtent3D& extent, const VkExtent3D& divisor)
-{
-	tcu::UVec3 result;
-
-	result.x() = extent.width  / divisor.width  + ((extent.width  % divisor.width)  ? 1u : 0u);
-	result.y() = extent.height / divisor.height + ((extent.height % divisor.height) ? 1u : 0u);
-	result.z() = extent.depth  / divisor.depth  + ((extent.depth  % divisor.depth)  ? 1u : 0u);
-
-	return result;
 }
 
 class ImageSparseMemoryAliasingCase : public TestCase
@@ -276,7 +266,7 @@ tcu::TestStatus ImageSparseMemoryAliasingInstance::iterate (void)
 			const VkMemoryRequirements imageMemoryRequirements = getImageMemoryRequirements(deviceInterface, getDevice(), *imageRead);
 
 			// Check if required image memory size does not exceed device limits
-			if (imageMemoryRequirements.size > getPhysicalDeviceProperties(instance, physicalDevice).limits.sparseAddressSpaceSize)
+			if (imageMemoryRequirements.size > getPhysicalDeviceProperties(instance, getPhysicalDevice(secondDeviceID)).limits.sparseAddressSpaceSize)
 				TCU_THROW(NotSupportedError, "Required memory size for sparse resource exceeds device limits");
 
 			DE_ASSERT((imageMemoryRequirements.size % imageMemoryRequirements.alignment) == 0);
@@ -298,10 +288,24 @@ tcu::TestStatus ImageSparseMemoryAliasingInstance::iterate (void)
 
 			DE_ASSERT((aspectRequirements.imageMipTailSize % imageMemoryRequirements.alignment) == 0);
 
-			const deUint32 memoryType = findMatchingMemoryType(instance, physicalDevice, imageMemoryRequirements, MemoryRequirement::Any);
+			const deUint32 memoryType = findMatchingMemoryType(instance, getPhysicalDevice(secondDeviceID), imageMemoryRequirements, MemoryRequirement::Any);
 
 			if (memoryType == NO_MATCH_FOUND)
 				return tcu::TestStatus::fail("No matching memory type found");
+
+			if (firstDeviceID != secondDeviceID)
+			{
+				VkPeerMemoryFeatureFlags	peerMemoryFeatureFlags = (VkPeerMemoryFeatureFlags)0;
+				const deUint32				heapIndex = getHeapIndexForMemoryType(instance, getPhysicalDevice(secondDeviceID), memoryType);
+				deviceInterface.getDeviceGroupPeerMemoryFeatures(getDevice(), heapIndex, firstDeviceID, secondDeviceID, &peerMemoryFeatureFlags);
+
+				if (((peerMemoryFeatureFlags & VK_PEER_MEMORY_FEATURE_COPY_SRC_BIT)    == 0) ||
+					((peerMemoryFeatureFlags & VK_PEER_MEMORY_FEATURE_COPY_DST_BIT)    == 0) ||
+					((peerMemoryFeatureFlags & VK_PEER_MEMORY_FEATURE_GENERIC_DST_BIT) == 0))
+				{
+					TCU_THROW(NotSupportedError, "Peer memory does not support COPY_SRC, COPY_DST, and GENERIC_DST");
+				}
+			}
 
 			// Bind memory for each layer
 			for (deUint32 layerNdx = 0; layerNdx < imageSparseInfo.arrayLayers; ++layerNdx)

@@ -37,6 +37,14 @@ namespace vkt
 namespace SpirVAssembly
 {
 
+enum Extension8BitStorageFeatureBits
+{
+	EXT8BITSTORAGEFEATURES_STORAGE_BUFFER			= (1u << 1),
+	EXT8BITSTORAGEFEATURES_UNIFORM_STORAGE_BUFFER	= (1u << 2),
+	EXT8BITSTORAGEFEATURES_PUSH_CONSTANT			= (1u << 3),
+};
+typedef deUint32 Extension8BitStorageFeatures;
+
 enum Extension16BitStorageFeatureBits
 {
 	EXT16BITSTORAGEFEATURES_UNIFORM_BUFFER_BLOCK	= (1u << 1),
@@ -55,44 +63,30 @@ typedef deUint32 ExtensionVariablePointersFeatures;
 
 struct VulkanFeatures
 {
+	Extension8BitStorageFeatures		ext8BitStorage;
 	Extension16BitStorageFeatures		ext16BitStorage;
 	ExtensionVariablePointersFeatures	extVariablePointers;
 	vk::VkPhysicalDeviceFeatures		coreFeatures;
 
 	VulkanFeatures				(void)
-		: ext16BitStorage		(0)
+		: ext8BitStorage		(0)
+		, ext16BitStorage		(0)
 		, extVariablePointers	(0)
 		, coreFeatures			(vk::VkPhysicalDeviceFeatures())
 	{}
 };
 
+// Returns true if the given 8bit storage extension features in `toCheck` are all supported.
+bool is8BitStorageFeaturesSupported (const Context&						context,
+									  Extension8BitStorageFeatures		toCheck);
+
 // Returns true if the given 16bit storage extension features in `toCheck` are all supported.
-bool is16BitStorageFeaturesSupported (const deUint32 apiVersion,
-									  const vk::InstanceInterface&		vkInstance,
-									  vk::VkPhysicalDevice				device,
-									  const std::vector<std::string>&	instanceExtensions,
-									  Extension16BitStorageFeatures		toCheck);
+bool is16BitStorageFeaturesSupported (const Context&				context,
+									  Extension16BitStorageFeatures	toCheck);
 
 // Returns true if the given variable pointers extension features in `toCheck` are all supported.
-bool isVariablePointersFeaturesSupported (const deUint32 apiVersion,
-										  const vk::InstanceInterface&		vkInstance,
-										  vk::VkPhysicalDevice				device,
-										  const std::vector<std::string>&	instanceExtensions,
+bool isVariablePointersFeaturesSupported (const Context&					context,
 										  ExtensionVariablePointersFeatures	toCheck);
-
-// Creates a Vulkan logical device with the requiredExtensions enabled and all other extensions disabled.
-// The logical device will be created from the instance and physical device in the given context.
-// A single queue will be created from the given queue family.
-vk::Move<vk::VkDevice> createDeviceWithExtensions (Context&							context,
-												   deUint32							queueFamilyIndex,
-												   const std::vector<std::string>&	supportedExtensions,
-												   const std::vector<std::string>&	requiredExtensions);
-
-// Creates a SimpleAllocator on the given device.
-vk::Allocator* createAllocator (const vk::InstanceInterface& instanceInterface,
-								const vk::VkPhysicalDevice physicalDevice,
-								const vk::DeviceInterface& deviceInterface,
-								const vk::VkDevice device);
 
 deUint32 getMinRequiredVulkanVersion (const vk::SpirvVersion version);
 

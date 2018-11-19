@@ -176,11 +176,12 @@ class SourcePackage (Source):
 			self.postExtract(dstPath)
 
 class GitRepo (Source):
-	def __init__(self, httpsUrl, sshUrl, revision, baseDir, extractDir = "src"):
+	def __init__(self, httpsUrl, sshUrl, revision, baseDir, extractDir = "src", removeTags = []):
 		Source.__init__(self, baseDir, extractDir)
 		self.httpsUrl	= httpsUrl
 		self.sshUrl		= sshUrl
 		self.revision	= revision
+		self.removeTags	= removeTags
 
 	def detectProtocol(self, cmdProtocol = None):
 		# reuse parent repo protocol
@@ -228,6 +229,11 @@ class GitRepo (Source):
 
 		pushWorkingDir(fullDstPath)
 		try:
+			for tag in self.removeTags:
+				proc = subprocess.Popen(['git', 'tag', '-l', tag], stdout=subprocess.PIPE)
+				(stdout, stderr) = proc.communicate()
+				if proc.returncode == 0:
+					execute(["git", "tag", "-d",tag])
 			execute(["git", "fetch", "--tags", url, "+refs/heads/*:refs/remotes/origin/*"])
 			execute(["git", "checkout", self.revision])
 		finally:
@@ -252,17 +258,18 @@ PACKAGES = [
 	GitRepo(
 		"https://github.com/KhronosGroup/SPIRV-Tools.git",
 		None,
-		"vulkan-1.1-rc1",
+		"eea449a1e82ab6a860b68f9b0a23f0432fe9939f",
 		"spirv-tools"),
 	GitRepo(
 		"https://github.com/KhronosGroup/glslang.git",
 		None,
-		"6.2.2596",
-		"glslang"),
+		"e9405d0b443a1849fa55b7bfeaceda586a1c37af",
+		"glslang",
+		removeTags = ['master-tot']),
 	GitRepo(
 		"https://github.com/KhronosGroup/SPIRV-Headers.git",
 		None,
-		"vulkan-1.1-rc2",
+		"d5b2e1255f706ce1f88812217e9a554f299848af",
 		"spirv-headers"),
 ]
 

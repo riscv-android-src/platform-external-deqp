@@ -45,7 +45,13 @@ namespace SpirVAssembly
 {
 
 typedef vk::Unique<VkBuffer>										BufferHandleUp;
+typedef vk::Unique<VkImage>											ImageHandleUp;
+typedef vk::Unique<VkImageView>										ImageViewHandleUp;
+typedef vk::Unique<VkSampler>										SamplerHandleUp;
 typedef de::SharedPtr<BufferHandleUp>								BufferHandleSp;
+typedef de::SharedPtr<ImageHandleUp>								ImageHandleSp;
+typedef de::SharedPtr<ImageViewHandleUp>							ImageViewHandleSp;
+typedef de::SharedPtr<SamplerHandleUp>								SamplerHandleSp;
 typedef vk::Unique<vk::VkShaderModule>								ModuleHandleUp;
 typedef de::SharedPtr<ModuleHandleUp>								ModuleHandleSp;
 typedef std::pair<std::string, vk::VkShaderStageFlagBits>			EntryToStage;
@@ -82,6 +88,8 @@ struct GraphicsResources
 {
 	// Resources used as inputs.
 	std::vector<Resource>		inputs;
+	// Input resource format if used
+	VkFormat					inputFormat;
 	// Resources used as outputs. The data supplied will be used as
 	// the expected outputs for the corresponding bindings by default.
 	// If other behaviors are needed, please provide a custom verifyIO.
@@ -97,7 +105,8 @@ struct GraphicsResources
 	SpirvVersion				spirvVersion;
 
 							GraphicsResources()
-								: verifyIO		(DE_NULL)
+								: inputFormat	(VK_FORMAT_R32G32B32A32_SFLOAT)
+								, verifyIO		(DE_NULL)
 								, verifyBinary	(DE_NULL)
 								, spirvVersion	(SPIRV_VERSION_1_0)
 							{}
@@ -242,7 +251,7 @@ private:
 };
 
 // Returns the corresponding buffer usage flag bit for the given descriptor type.
-VkBufferUsageFlagBits getMatchingBufferUsageFlagBit(VkDescriptorType dType);
+VkBufferUsageFlagBits getMatchingBufferUsageFlagBit (VkDescriptorType dType);
 
 // Context for a specific test instantiation. For example, an instantiation
 // may test colors yellow/magenta/cyan/mauve in a tesselation shader
@@ -321,7 +330,7 @@ const std::string numberToString (T number)
 
 // Performs a bitwise copy of source to the destination type Dest.
 template <typename Dest, typename Src>
-Dest bitwiseCast(Src source)
+Dest bitwiseCast (Src source)
 {
   Dest dest;
   DE_STATIC_ASSERT(sizeof(source) == sizeof(dest));
@@ -341,13 +350,13 @@ void getHalfColorsFullAlpha (tcu::RGBA (&colors)[4]);
 void getInvertedDefaultColors (tcu::RGBA (&colors)[4]);
 
 // Creates fragments that specialize into a simple pass-through shader (of any kind).
-std::map<std::string, std::string> passthruFragments(void);
+std::map<std::string, std::string> passthruFragments (void);
 
-void createCombinedModule(vk::SourceCollections& dst, InstanceContext);
+void createCombinedModule (vk::SourceCollections& dst, InstanceContext);
 
 // This has two shaders of each stage. The first
 // is a passthrough, the second inverts the color.
-void createMultipleEntries(vk::SourceCollections& dst, InstanceContext);
+void createMultipleEntries (vk::SourceCollections& dst, InstanceContext);
 
 // Turns a statically sized array of ShaderElements into an instance-context
 // by setting up the mapping of modules to their contained shaders and stages.
@@ -403,12 +412,27 @@ InstanceContext createInstanceContext (const ShaderElement							(&elements)[N],
 	return createInstanceContext(elements, defaultColors, defaultColors, testCodeFragments);
 }
 
+void addShaderCodeCustomVertex (vk::SourceCollections& dst, InstanceContext& context, const SpirVAsmBuildOptions* spirVAsmBuildOptions);
+void addShaderCodeCustomTessControl (vk::SourceCollections& dst, InstanceContext& context, const SpirVAsmBuildOptions* spirVAsmBuildOptions);
+void addShaderCodeCustomTessEval (vk::SourceCollections& dst, InstanceContext& context, const SpirVAsmBuildOptions* spirVAsmBuildOptions);
+void addShaderCodeCustomGeometry (vk::SourceCollections& dst, InstanceContext& context, const SpirVAsmBuildOptions* spirVAsmBuildOptions);
+void addShaderCodeCustomFragment (vk::SourceCollections& dst, InstanceContext& context, const SpirVAsmBuildOptions* spirVAsmBuildOptions);
 
-void addShaderCodeCustomVertex(vk::SourceCollections& dst, InstanceContext& context, const SpirVAsmBuildOptions* spirVAsmBuildOptions);
-void addShaderCodeCustomTessControl(vk::SourceCollections& dst, InstanceContext& context, const SpirVAsmBuildOptions* spirVAsmBuildOptions);
-void addShaderCodeCustomTessEval(vk::SourceCollections& dst, InstanceContext& context, const SpirVAsmBuildOptions* spirVAsmBuildOptions);
-void addShaderCodeCustomGeometry(vk::SourceCollections& dst, InstanceContext& context, const SpirVAsmBuildOptions* spirVAsmBuildOptions);
-void addShaderCodeCustomFragment(vk::SourceCollections& dst, InstanceContext& context, const SpirVAsmBuildOptions* spirVAsmBuildOptions);
+void createTestForStage (vk::VkShaderStageFlagBits					stage,
+						 const std::string&							name,
+						 const tcu::RGBA							(&inputColors)[4],
+						 const tcu::RGBA							(&outputColors)[4],
+						 const std::map<std::string, std::string>&	testCodeFragments,
+						 const std::vector<deInt32>&				specConstants,
+						 const PushConstants&						pushConstants,
+						 const GraphicsResources&					resources,
+						 const GraphicsInterfaces&					interfaces,
+						 const std::vector<std::string>&			extensions,
+						 const std::vector<std::string>&			features,
+						 VulkanFeatures								vulkanFeatures,
+						 tcu::TestCaseGroup*						tests,
+						 const qpTestResult							failResult			= QP_TEST_RESULT_FAIL,
+						 const std::string&							failMessageTemplate = std::string());
 
 void createTestsForAllStages (const std::string&						name,
 							  const tcu::RGBA							(&inputColors)[4],
@@ -489,6 +513,28 @@ inline void createTestsForAllStages (const std::string&							name,
 			tests, failResult, failMessageTemplate);
 }
 
+inline void createTestsForAllStages (const std::string&							name,
+									 const tcu::RGBA							(&inputColors)[4],
+									 const tcu::RGBA							(&outputColors)[4],
+									 const std::map<std::string, std::string>&	testCodeFragments,
+									 const GraphicsResources&					resources,
+									 const std::vector<std::string>&			extensions,
+									 const std::vector<std::string>&			features,
+									 tcu::TestCaseGroup*						tests,
+									 VulkanFeatures								vulkanFeatures		= VulkanFeatures(),
+									 const qpTestResult							failResult			= QP_TEST_RESULT_FAIL,
+									 const std::string&							failMessageTemplate	= std::string())
+{
+	std::vector<deInt32>		noSpecConstants;
+	PushConstants				noPushConstants;
+	GraphicsInterfaces			noInterfaces;
+
+	createTestsForAllStages(
+			name, inputColors, outputColors, testCodeFragments, noSpecConstants, noPushConstants,
+			resources, noInterfaces, extensions, features, vulkanFeatures,
+			tests, failResult, failMessageTemplate);
+}
+
 inline void createTestsForAllStages (const std::string& name,
 									 const tcu::RGBA							(&inputColors)[4],
 									 const tcu::RGBA							(&outputColors)[4],
@@ -542,7 +588,7 @@ tcu::TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext i
 // Adds a new test to group using custom fragments for the tessellation-control
 // stage and passthrough fragments for all other stages.  Uses default colors
 // for input and expected output.
-void addTessCtrlTest(tcu::TestCaseGroup* group, const char* name, const std::map<std::string, std::string>& fragments);
+void addTessCtrlTest (tcu::TestCaseGroup* group, const char* name, const std::map<std::string, std::string>& fragments);
 
 // Given the original 32-bit float value, computes the corresponding 16-bit
 // float value under the given rounding mode flags and compares with the
@@ -556,6 +602,19 @@ void addTessCtrlTest(tcu::TestCaseGroup* group, const char* name, const std::map
 // * Different bit patterns of NaNs are allowed.
 // * For the rest, require exactly the same bit pattern.
 bool compare16BitFloat (float original, deUint16 returned, RoundingModeFlags flags, tcu::TestLog& log);
+
+// Given the original 16-bit float value, computes the corresponding 32-bit
+// float value and compares with the returned 32-bit float value.
+// Returns true if they are considered as equal.
+//
+// The following equivalence criteria are respected:
+// * Positive and negative zeros are considered equivalent.
+// * Denormalized floats are allowed to be flushed to zeros, including
+//   * Inputted 16bit denormalized float
+//   * Generated 32bit denormalized float
+// * Different bit patterns of NaNs are allowed.
+// * For the rest, require exactly the same bit pattern.
+bool compare16BitFloat (deUint16 returned, float original, tcu::TestLog& log);
 
 // Compare the returned 32-bit float against its expected value.
 //

@@ -34,6 +34,7 @@
 #include "vkTypeUtil.hpp"
 #include "vkBuilderUtil.hpp"
 #include "vkImageUtil.hpp"
+#include "vkCmdUtil.hpp"
 
 #include "tcuTestLog.hpp"
 #include "tcuVector.hpp"
@@ -603,7 +604,7 @@ void ImageAccessTestInstance::uploadImage (vk::VkImage image, const tcu::Texture
 						  0u, (const vk::VkMemoryBarrier*)DE_NULL,
 						  0u, (const vk::VkBufferMemoryBarrier*)DE_NULL,
 						  1u, &postCopyBarrier);
-	VK_CHECK(vk.endCommandBuffer(*cmdBuffer));
+	endCommandBuffer(vk, *cmdBuffer);
 
 	{
 		const vk::Unique<vk::VkFence>	fence		(createFence(vk, device));
@@ -708,7 +709,7 @@ void ImageAccessTestInstance::copyToProtectedImage (vk::VkImage srcImage, vk::Vk
 						  0, (const vk::VkMemoryBarrier*)DE_NULL,
 						  0, (const vk::VkBufferMemoryBarrier*)DE_NULL,
 						  1, &postImgBarrier);
-	VK_CHECK(vk.endCommandBuffer(*cmdBuffer));
+	endCommandBuffer(vk, *cmdBuffer);
 
 	{
 		const vk::Unique<vk::VkFence>	fence		(createFence(vk, device));
@@ -782,7 +783,7 @@ void ImageAccessTestInstance::clearImage (vk::VkImage image)
 						  0, (const vk::VkMemoryBarrier*)DE_NULL,
 						  0, (const vk::VkBufferMemoryBarrier*)DE_NULL,
 						  1, &postImageBarrier);
-	VK_CHECK(vk.endCommandBuffer(*cmdBuffer));
+	endCommandBuffer(vk, *cmdBuffer);
 
 	{
 		const vk::Unique<vk::VkFence>	fence		(createFence(vk, device));
@@ -972,7 +973,7 @@ tcu::TestStatus ImageAccessTestInstance::executeComputeTest (void)
 		vk.cmdBindPipeline(*cmdBuffer, vk::VK_PIPELINE_BIND_POINT_COMPUTE, *pipeline);
 		vk.cmdBindDescriptorSets(*cmdBuffer, vk::VK_PIPELINE_BIND_POINT_COMPUTE, *pipelineLayout, 0u, 1u, &*descriptorSet, 0u, DE_NULL);
 		vk.cmdDispatch(*cmdBuffer, (deUint32)IMAGE_WIDTH, (deUint32)IMAGE_HEIGHT, 1u);
-		VK_CHECK(vk.endCommandBuffer(*cmdBuffer));
+		endCommandBuffer(vk, *cmdBuffer);
 
 		VK_CHECK(queueSubmit(ctx, PROTECTION_ENABLED, queue, *cmdBuffer, *fence, ~0ull));
 	}
@@ -1300,19 +1301,7 @@ tcu::TestStatus ImageAccessTestInstance::executeFragmentTest (void)
 							  1, &startImgBarrier);
 	}
 
-	const vk::VkClearValue				clearValue			= vk::makeClearValueColorF32(0.0f, 0.0f, 0.0f, 0.0f);
-	const vk::VkRenderPassBeginInfo		passBeginInfo		=
-	{
-		vk::VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,		// sType
-		DE_NULL,											// pNext
-		*renderPass,										// renderPass
-		*framebuffer,										// framebuffer
-		{ { 0, 0 }, { RENDER_WIDTH, RENDER_HEIGHT } },		// renderArea
-		1u,													// clearValueCount
-		&clearValue,										// pClearValues
-	};
-
-	vk.cmdBeginRenderPass(*cmdBuffer, &passBeginInfo, vk::VK_SUBPASS_CONTENTS_INLINE);
+	beginRenderPass(vk, *cmdBuffer, *renderPass, *framebuffer, vk::makeRect2D(0, 0, RENDER_WIDTH, RENDER_HEIGHT), tcu::Vec4(0.0f));
 
 	vk.cmdBindPipeline(*cmdBuffer, vk::VK_PIPELINE_BIND_POINT_GRAPHICS, *graphicsPipeline);
 	vk.cmdBindDescriptorSets(*cmdBuffer, vk::VK_PIPELINE_BIND_POINT_GRAPHICS, *pipelineLayout, 0u, 1u, &*descriptorSet, 0u, DE_NULL);
@@ -1326,7 +1315,7 @@ tcu::TestStatus ImageAccessTestInstance::executeFragmentTest (void)
 
 	vk.cmdDraw(*cmdBuffer, /*vertexCount*/ 4u, 1u, 0u, 1u);
 
-	vk.cmdEndRenderPass(*cmdBuffer);
+	endRenderPass(vk, *cmdBuffer);
 
 	{
 		const vk::VkImageMemoryBarrier	endImgBarrier		=
@@ -1357,7 +1346,7 @@ tcu::TestStatus ImageAccessTestInstance::executeFragmentTest (void)
 							  1, &endImgBarrier);
 	}
 
-	VK_CHECK(vk.endCommandBuffer(*cmdBuffer));
+	endCommandBuffer(vk, *cmdBuffer);
 
 	// Submit command buffer
 	{

@@ -35,6 +35,7 @@
 
 #include "tcuTextureUtil.hpp"
 #include "deSharedPtr.hpp"
+#include "deFloat16.h"
 
 #include "vkMemUtil.hpp"
 #include "vkQueryUtil.hpp"
@@ -42,6 +43,8 @@
 #include "vkRef.hpp"
 #include "vkRefUtil.hpp"
 #include "vkBuilderUtil.hpp"
+#include "vkCmdUtil.hpp"
+#include "vkObjUtil.hpp"
 
 #include <map>
 #include <set>
@@ -101,8 +104,7 @@ VarType& VarType::operator= (const VarType& other)
 	if (this == &other)
 		return *this; // Self-assignment.
 
-	if (m_type == TYPE_ARRAY)
-		delete m_data.array.elementType;
+	VarType *oldElementType = m_type == TYPE_ARRAY ? m_data.array.elementType : DE_NULL;
 
 	m_type	= other.m_type;
 	m_flags	= other.m_flags;
@@ -115,6 +117,8 @@ VarType& VarType::operator= (const VarType& other)
 	}
 	else
 		m_data = other.m_data;
+
+	delete oldElementType;
 
 	return *this;
 }
@@ -302,7 +306,18 @@ std::ostream& operator<< (std::ostream& str, const LayoutFlagsFmt& fmt)
 
 int getDataTypeByteSize (glu::DataType type)
 {
-	return glu::getDataTypeScalarSize(type)*(int)sizeof(deUint32);
+	if (deInRange32(type, glu::TYPE_UINT8, glu::TYPE_UINT8_VEC4) || deInRange32(type, glu::TYPE_INT8, glu::TYPE_INT8_VEC4))
+	{
+		return glu::getDataTypeScalarSize(type)*(int)sizeof(deUint8);
+	}
+	if (deInRange32(type, glu::TYPE_UINT16, glu::TYPE_UINT16_VEC4) || deInRange32(type, glu::TYPE_INT16, glu::TYPE_INT16_VEC4) || deInRange32(type, glu::TYPE_FLOAT16, glu::TYPE_FLOAT16_VEC4))
+	{
+		return glu::getDataTypeScalarSize(type)*(int)sizeof(deUint16);
+	}
+	else
+	{
+		return glu::getDataTypeScalarSize(type)*(int)sizeof(deUint32);
+	}
 }
 
 int getDataTypeByteAlignment (glu::DataType type)
@@ -328,6 +343,34 @@ int getDataTypeByteAlignment (glu::DataType type)
 		case glu::TYPE_INT_VEC4:
 		case glu::TYPE_UINT_VEC4:
 		case glu::TYPE_BOOL_VEC4:	return 4*(int)sizeof(deUint32);
+
+		case glu::TYPE_UINT8:
+		case glu::TYPE_INT8	:			return 1*(int)sizeof(deUint8);
+
+		case glu::TYPE_UINT8_VEC2:
+		case glu::TYPE_INT8_VEC2:		return 2*(int)sizeof(deUint8);
+
+		case glu::TYPE_UINT8_VEC3:
+		case glu::TYPE_INT8_VEC3:		// Fall-through to vec4
+
+		case glu::TYPE_UINT8_VEC4:
+		case glu::TYPE_INT8_VEC4:		return 4*(int)sizeof(deUint8);
+
+		case glu::TYPE_UINT16:
+		case glu::TYPE_INT16:
+		case glu::TYPE_FLOAT16:			return 1*(int)sizeof(deUint16);
+
+		case glu::TYPE_UINT16_VEC2:
+		case glu::TYPE_INT16_VEC2:
+		case glu::TYPE_FLOAT16_VEC2:	return 2*(int)sizeof(deUint16);
+
+		case glu::TYPE_UINT16_VEC3:
+		case glu::TYPE_INT16_VEC3:
+		case glu::TYPE_FLOAT16_VEC3:	// Fall-through to vec4
+
+		case glu::TYPE_UINT16_VEC4:
+		case glu::TYPE_INT16_VEC4:
+		case glu::TYPE_FLOAT16_VEC4:	return 4*(int)sizeof(deUint16);
 
 		default:
 			DE_ASSERT(false);
@@ -580,7 +623,7 @@ void generateValue (const UniformLayoutEntry& entry, void* basePtr, de::Random& 
 	int				numVecs			= isMatrix ? (entry.isRowMajor ? glu::getDataTypeMatrixNumRows(entry.type) : glu::getDataTypeMatrixNumColumns(entry.type)) : 1;
 	int				vecSize			= scalarSize / numVecs;
 	bool			isArray			= entry.size > 1;
-	const int		compSize		= sizeof(deUint32);
+	const size_t	compSize		= getDataTypeByteSize(scalarType);
 
 	DE_ASSERT(scalarSize%numVecs == 0);
 
@@ -601,6 +644,11 @@ void generateValue (const UniformLayoutEntry& entry, void* basePtr, de::Random& 
 					case glu::TYPE_FLOAT:	*((float*)compPtr)		= (float)rnd.getInt(-9, 9);						break;
 					case glu::TYPE_INT:		*((int*)compPtr)		= rnd.getInt(-9, 9);							break;
 					case glu::TYPE_UINT:	*((deUint32*)compPtr)	= (deUint32)rnd.getInt(0, 9);					break;
+					case glu::TYPE_INT8:	*((deInt8*)compPtr)		= (deInt8)rnd.getInt(-9, 9);					break;
+					case glu::TYPE_UINT8:	*((deUint8*)compPtr)	= (deUint8)rnd.getInt(0, 9);					break;
+					case glu::TYPE_INT16:	*((deInt16*)compPtr)	= (deInt16)rnd.getInt(-9, 9);					break;
+					case glu::TYPE_UINT16:	*((deUint16*)compPtr)	= (deUint16)rnd.getInt(0, 9);					break;
+					case glu::TYPE_FLOAT16:	*((deFloat16*)compPtr)	= deFloat32To16((float)rnd.getInt(-9, 9));		break;
 					// \note Random bit pattern is used for true values. Spec states that all non-zero values are
 					//       interpreted as true but some implementations fail this.
 					case glu::TYPE_BOOL:	*((deUint32*)compPtr)	= rnd.getBool() ? rnd.getUint32()|1u : 0u;		break;
@@ -661,6 +709,26 @@ const char* getCompareFuncForType (glu::DataType type)
 		case glu::TYPE_BOOL_VEC2:		return "mediump float compare_bvec2    (bvec2 a, bvec2 b)              { return a == b ? 1.0 : 0.0; }\n";
 		case glu::TYPE_BOOL_VEC3:		return "mediump float compare_bvec3    (bvec3 a, bvec3 b)              { return a == b ? 1.0 : 0.0; }\n";
 		case glu::TYPE_BOOL_VEC4:		return "mediump float compare_bvec4    (bvec4 a, bvec4 b)              { return a == b ? 1.0 : 0.0; }\n";
+		case glu::TYPE_FLOAT16:			return "mediump float compare_float16_t(highp float a, highp float b)  { return abs(a - b) < 0.05 ? 1.0 : 0.0; }\n";
+		case glu::TYPE_FLOAT16_VEC2:	return "mediump float compare_f16vec2  (highp vec2 a, highp vec2 b)    { return compare_float(a.x, b.x)*compare_float(a.y, b.y); }\n";
+		case glu::TYPE_FLOAT16_VEC3:	return "mediump float compare_f16vec3  (highp vec3 a, highp vec3 b)    { return compare_float(a.x, b.x)*compare_float(a.y, b.y)*compare_float(a.z, b.z); }\n";
+		case glu::TYPE_FLOAT16_VEC4:	return "mediump float compare_f16vec4  (highp vec4 a, highp vec4 b)    { return compare_float(a.x, b.x)*compare_float(a.y, b.y)*compare_float(a.z, b.z)*compare_float(a.w, b.w); }\n";
+		case glu::TYPE_INT8:			return "mediump float compare_int8_t   (highp int a, highp int b)      { return a == b ? 1.0 : 0.0; }\n";
+		case glu::TYPE_INT8_VEC2:		return "mediump float compare_i8vec2   (highp ivec2 a, highp ivec2 b)  { return a == b ? 1.0 : 0.0; }\n";
+		case glu::TYPE_INT8_VEC3:		return "mediump float compare_i8vec3   (highp ivec3 a, highp ivec3 b)  { return a == b ? 1.0 : 0.0; }\n";
+		case glu::TYPE_INT8_VEC4:		return "mediump float compare_i8vec4   (highp ivec4 a, highp ivec4 b)  { return a == b ? 1.0 : 0.0; }\n";
+		case glu::TYPE_UINT8:			return "mediump float compare_uint8_t  (highp uint a, highp uint b)    { return a == b ? 1.0 : 0.0; }\n";
+		case glu::TYPE_UINT8_VEC2:		return "mediump float compare_u8vec2   (highp uvec2 a, highp uvec2 b)  { return a == b ? 1.0 : 0.0; }\n";
+		case glu::TYPE_UINT8_VEC3:		return "mediump float compare_u8vec3   (highp uvec3 a, highp uvec3 b)  { return a == b ? 1.0 : 0.0; }\n";
+		case glu::TYPE_UINT8_VEC4:		return "mediump float compare_u8vec4   (highp uvec4 a, highp uvec4 b)  { return a == b ? 1.0 : 0.0; }\n";
+		case glu::TYPE_INT16:			return "mediump float compare_int16_t  (highp int a, highp int b)      { return a == b ? 1.0 : 0.0; }\n";
+		case glu::TYPE_INT16_VEC2:		return "mediump float compare_i16vec2  (highp ivec2 a, highp ivec2 b)  { return a == b ? 1.0 : 0.0; }\n";
+		case glu::TYPE_INT16_VEC3:		return "mediump float compare_i16vec3  (highp ivec3 a, highp ivec3 b)  { return a == b ? 1.0 : 0.0; }\n";
+		case glu::TYPE_INT16_VEC4:		return "mediump float compare_i16vec4  (highp ivec4 a, highp ivec4 b)  { return a == b ? 1.0 : 0.0; }\n";
+		case glu::TYPE_UINT16:			return "mediump float compare_uint16_t (highp uint a, highp uint b)    { return a == b ? 1.0 : 0.0; }\n";
+		case glu::TYPE_UINT16_VEC2:		return "mediump float compare_u16vec2  (highp uvec2 a, highp uvec2 b)  { return a == b ? 1.0 : 0.0; }\n";
+		case glu::TYPE_UINT16_VEC3:		return "mediump float compare_u16vec3  (highp uvec3 a, highp uvec3 b)  { return a == b ? 1.0 : 0.0; }\n";
+		case glu::TYPE_UINT16_VEC4:		return "mediump float compare_u16vec4  (highp uvec4 a, highp uvec4 b)  { return a == b ? 1.0 : 0.0; }\n";
 		default:
 			DE_ASSERT(false);
 			return DE_NULL;
@@ -674,6 +742,9 @@ void getCompareDependencies (std::set<glu::DataType>& compareFuncs, glu::DataTyp
 		case glu::TYPE_FLOAT_VEC2:
 		case glu::TYPE_FLOAT_VEC3:
 		case glu::TYPE_FLOAT_VEC4:
+		case glu::TYPE_FLOAT16_VEC2:
+		case glu::TYPE_FLOAT16_VEC3:
+		case glu::TYPE_FLOAT16_VEC4:
 			compareFuncs.insert(glu::TYPE_FLOAT);
 			compareFuncs.insert(basicType);
 			break;
@@ -745,6 +816,28 @@ void generateCompareFuncs (std::ostream& str, const ShaderInterface& interface)
 		if (compareFuncs.find(glu::DataType(type)) != compareFuncs.end())
 			str << getCompareFuncForType(glu::DataType(type));
 	}
+}
+
+bool uses16BitStorage (const ShaderInterface& interface)
+{
+	// If any of blocks has LAYOUT_16BIT_STORAGE flag
+	for (int ndx = 0; ndx < interface.getNumUniformBlocks(); ++ndx)
+	{
+		if (interface.getUniformBlock(ndx).getFlags() & LAYOUT_16BIT_STORAGE)
+			return true;
+	}
+	return false;
+}
+
+bool uses8BitStorage (const ShaderInterface& interface)
+{
+	// If any of blocks has LAYOUT_8BIT_STORAGE flag
+	for (int ndx = 0; ndx < interface.getNumUniformBlocks(); ++ndx)
+	{
+		if (interface.getUniformBlock(ndx).getFlags() & LAYOUT_8BIT_STORAGE)
+			return true;
+	}
+	return false;
 }
 
 struct Indent
@@ -939,6 +1032,34 @@ private:
 	typename std::vector<T*>::const_iterator	m_next;
 };
 
+glu::DataType getPromoteType(glu::DataType type)
+{
+	switch (type)
+    {
+	case glu::TYPE_UINT8:			return glu::TYPE_UINT;
+	case glu::TYPE_UINT8_VEC2:		return glu::TYPE_UINT_VEC2;
+	case glu::TYPE_UINT8_VEC3:		return glu::TYPE_UINT_VEC3;
+	case glu::TYPE_UINT8_VEC4:		return glu::TYPE_UINT_VEC4;
+	case glu::TYPE_INT8:			return glu::TYPE_INT;
+	case glu::TYPE_INT8_VEC2:		return glu::TYPE_INT_VEC2;
+	case glu::TYPE_INT8_VEC3:		return glu::TYPE_INT_VEC3;
+	case glu::TYPE_INT8_VEC4:		return glu::TYPE_INT_VEC4;
+	case glu::TYPE_UINT16:			return glu::TYPE_UINT;
+	case glu::TYPE_UINT16_VEC2:		return glu::TYPE_UINT_VEC2;
+	case glu::TYPE_UINT16_VEC3:		return glu::TYPE_UINT_VEC3;
+	case glu::TYPE_UINT16_VEC4:		return glu::TYPE_UINT_VEC4;
+	case glu::TYPE_INT16:			return glu::TYPE_INT;
+	case glu::TYPE_INT16_VEC2:		return glu::TYPE_INT_VEC2;
+	case glu::TYPE_INT16_VEC3:		return glu::TYPE_INT_VEC3;
+	case glu::TYPE_INT16_VEC4:		return glu::TYPE_INT_VEC4;
+	case glu::TYPE_FLOAT16:			return glu::TYPE_FLOAT;
+	case glu::TYPE_FLOAT16_VEC2:	return glu::TYPE_FLOAT_VEC2;
+	case glu::TYPE_FLOAT16_VEC3:	return glu::TYPE_FLOAT_VEC3;
+	case glu::TYPE_FLOAT16_VEC4:	return glu::TYPE_FLOAT_VEC4;
+	default: return type;
+	}
+}
+
 void generateDeclaration (std::ostringstream& src, int blockNdx, const UniformBlock& block, const UniformLayout& layout, bool shuffleUniformMembers)
 {
 	src << "layout(set = 0, binding = " << blockNdx;
@@ -977,10 +1098,10 @@ void generateValueSrc (std::ostringstream& src, const UniformLayoutEntry& entry,
 	int				scalarSize		= glu::getDataTypeScalarSize(entry.type);
 	bool			isArray			= entry.size > 1;
 	const deUint8*	elemPtr			= (const deUint8*)basePtr + entry.offset + (isArray ? elementNdx * entry.arrayStride : 0);
-	const int		compSize		= sizeof(deUint32);
+	const size_t	compSize		= getDataTypeByteSize(scalarType);
 
 	if (scalarSize > 1)
-		src << glu::getDataTypeName(entry.type) << "(";
+		src << glu::getDataTypeName(getPromoteType(entry.type)) << "(";
 
 	if (glu::isDataTypeMatrix(entry.type))
 	{
@@ -1015,8 +1136,13 @@ void generateValueSrc (std::ostringstream& src, const UniformLayoutEntry& entry,
 
 			switch (scalarType)
 			{
+				case glu::TYPE_FLOAT16:	src << de::floatToString(deFloat16To32(*((const deFloat16*)compPtr)), 1);	break;
 				case glu::TYPE_FLOAT:	src << de::floatToString(*((const float*)compPtr), 1);			break;
+				case glu::TYPE_INT8:	src << (deUint32)*((const deInt8*)compPtr);						break;
+				case glu::TYPE_INT16:	src << *((const deInt16*)compPtr);								break;
 				case glu::TYPE_INT:		src << *((const int*)compPtr);									break;
+				case glu::TYPE_UINT8:	src << (deUint32)*((const deUint8*)compPtr) << "u";				break;
+				case glu::TYPE_UINT16:	src << *((const deUint16*)compPtr) << "u";						break;
 				case glu::TYPE_UINT:	src << *((const deUint32*)compPtr) << "u";						break;
 				case glu::TYPE_BOOL:	src << (*((const deUint32*)compPtr) != 0u ? "true" : "false");	break;
 				default:
@@ -1199,8 +1325,14 @@ void generateSingleCompare (std::ostringstream&			src,
 	if (matrixLoadFlag == LOAD_FULL_MATRIX)
 	{
 		const char* typeName = glu::getDataTypeName(elementType);
+		const char* castName = "";
+		glu::DataType promoteType = getPromoteType(elementType);
+		if (elementType != promoteType)
+        {
+			castName = glu::getDataTypeName(promoteType);
+		}
 
-		src << "\tresult *= compare_" << typeName << "(" << srcName << ", ";
+		src << "\tresult *= compare_" << typeName << "(" << castName << "(" << srcName << "), ";
 		generateValueSrc(src, entry, basePtr, 0);
 		src << ");\n";
 	}
@@ -1235,11 +1367,18 @@ void generateCompareSrc (std::ostringstream&	src,
 		int							uniformNdx		= layout.getUniformLayoutIndex(blockNdx, fullApiName);
 		const UniformLayoutEntry&	entry			= layout.uniforms[uniformNdx];
 
+		const char* castName = "";
+		glu::DataType promoteType = getPromoteType(elementType);
+		if (elementType != promoteType)
+        {
+			castName = glu::getDataTypeName(promoteType);
+		}
+
 		if (isArray)
 		{
 			for (int elemNdx = 0; elemNdx < type.getArraySize(); elemNdx++)
 			{
-				src << "\tresult *= compare_" << typeName << "(" << srcName << "[" << elemNdx << "], ";
+				src << "\tresult *= compare_" << typeName << "(" << castName << "(" << srcName << "[" << elemNdx << "]), ";
 				generateValueSrc(src, entry, basePtr, elemNdx);
 				src << ");\n";
 			}
@@ -1330,6 +1469,8 @@ std::string generateVertexShader (const ShaderInterface& interface, const Unifor
 {
 	std::ostringstream src;
 	src << glu::getGLSLVersionDeclaration(glu::GLSL_VERSION_450) << "\n";
+	src << "#extension GL_EXT_shader_16bit_storage : enable\n";
+	src << "#extension GL_EXT_shader_8bit_storage : enable\n";
 
 	src << "layout(location = 0) in highp vec4 a_position;\n";
 	src << "layout(location = 0) out mediump float v_vtxResult;\n";
@@ -1370,6 +1511,8 @@ std::string generateFragmentShader (const ShaderInterface& interface, const Unif
 {
 	std::ostringstream src;
 	src << glu::getGLSLVersionDeclaration(glu::GLSL_VERSION_450) << "\n";
+	src << "#extension GL_EXT_shader_16bit_storage : enable\n";
+	src << "#extension GL_EXT_shader_8bit_storage : enable\n";
 
 	src << "layout(location = 0) in mediump float v_vtxResult;\n";
 	src << "layout(location = 0) out mediump vec4 dEQP_FragColor;\n";
@@ -1714,18 +1857,6 @@ tcu::TestStatus UniformBlockCaseInstance::iterate (void)
 	};
 	VK_CHECK(vk.beginCommandBuffer(*cmdBuffer, &beginInfo));
 
-	const vk::VkClearValue clearValue = vk::makeClearValueColorF32(0.125f, 0.25f, 0.75f, 1.0f);
-	const vk::VkRenderPassBeginInfo passBeginInfo	=
-	{
-		vk::VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,	// VkStructureType		sType;
-		DE_NULL,										// const void*			pNext;
-		*renderPass,									// VkRenderPass			renderPass;
-		*framebuffer,									// VkFramebuffer		framebuffer;
-		{ { 0, 0 }, { RENDER_WIDTH, RENDER_HEIGHT } },	// VkRect2D				renderArea;
-		1u,												// deUint32				clearValueCount;
-		&clearValue,									// const VkClearValue*	pClearValues;
-	};
-
 	// Add barrier for initializing image state
 	{
 		const vk::VkImageMemoryBarrier  initializeBarrier =
@@ -1754,7 +1885,7 @@ tcu::TestStatus UniformBlockCaseInstance::iterate (void)
 			1, &initializeBarrier);
 	}
 
-	vk.cmdBeginRenderPass(*cmdBuffer, &passBeginInfo, vk::VK_SUBPASS_CONTENTS_INLINE);
+	beginRenderPass(vk, *cmdBuffer, *renderPass, *framebuffer, makeRect2D(0, 0, RENDER_WIDTH, RENDER_HEIGHT), tcu::Vec4(0.125f, 0.25f, 0.75f, 1.0f));
 
 	vk.cmdBindPipeline(*cmdBuffer, vk::VK_PIPELINE_BIND_POINT_GRAPHICS, *pipeline);
 	vk.cmdBindDescriptorSets(*cmdBuffer, vk::VK_PIPELINE_BIND_POINT_GRAPHICS, *pipelineLayout, 0u, 1u, &*descriptorSet, 0u, DE_NULL);
@@ -1764,7 +1895,7 @@ tcu::TestStatus UniformBlockCaseInstance::iterate (void)
 	vk.cmdBindIndexBuffer(*cmdBuffer, *indicesBuffer, (vk::VkDeviceSize)0, vk::VK_INDEX_TYPE_UINT32);
 
 	vk.cmdDrawIndexed(*cmdBuffer, DE_LENGTH_OF_ARRAY(indices), 1u, 0u, 0u, 0u);
-	vk.cmdEndRenderPass(*cmdBuffer);
+	endRenderPass(vk, *cmdBuffer);
 
 	// Add render finish barrier
 	{
@@ -1835,28 +1966,10 @@ tcu::TestStatus UniformBlockCaseInstance::iterate (void)
 							  0, (const vk::VkImageMemoryBarrier*)DE_NULL);
 	}
 
-	VK_CHECK(vk.endCommandBuffer(*cmdBuffer));
+	endCommandBuffer(vk, *cmdBuffer);
 
 	// Submit the command buffer
-	{
-		const Unique<vk::VkFence> fence(vk::createFence(vk, device));
-
-		const VkSubmitInfo			submitInfo	=
-		{
-			VK_STRUCTURE_TYPE_SUBMIT_INFO,	// VkStructureType			sType;
-			DE_NULL,						// const void*				pNext;
-			0u,								// deUint32					waitSemaphoreCount;
-			DE_NULL,						// const VkSemaphore*		pWaitSemaphores;
-			(const VkPipelineStageFlags*)DE_NULL,
-			1u,								// deUint32					commandBufferCount;
-			&cmdBuffer.get(),				// const VkCommandBuffer*	pCommandBuffers;
-			0u,								// deUint32					signalSemaphoreCount;
-			DE_NULL							// const VkSemaphore*		pSignalSemaphores;
-		};
-
-		VK_CHECK(vk.queueSubmit(queue, 1u, &submitInfo, *fence));
-		VK_CHECK(vk.waitForFences(device, 1u, &fence.get(), DE_TRUE, ~0ull));
-	}
+	submitCommandsAndWait(vk, device, queue, cmdBuffer.get());
 
 	// Read back the results
 	tcu::Surface surface(RENDER_WIDTH, RENDER_HEIGHT);
@@ -1935,54 +2048,7 @@ vk::Move<VkRenderPass> UniformBlockCaseInstance::createRenderPass (vk::VkFormat 
 	const VkDevice					vkDevice				= m_context.getDevice();
 	const DeviceInterface&			vk						= m_context.getDeviceInterface();
 
-	const VkAttachmentDescription	attachmentDescription	=
-	{
-		0u,												// VkAttachmentDescriptorFlags	flags;
-		format,											// VkFormat						format;
-		VK_SAMPLE_COUNT_1_BIT,							// VkSampleCountFlagBits		samples;
-		VK_ATTACHMENT_LOAD_OP_CLEAR,					// VkAttachmentLoadOp			loadOp;
-		VK_ATTACHMENT_STORE_OP_STORE,					// VkAttachmentStoreOp			storeOp;
-		VK_ATTACHMENT_LOAD_OP_DONT_CARE,				// VkAttachmentLoadOp			stencilLoadOp;
-		VK_ATTACHMENT_STORE_OP_DONT_CARE,				// VkAttachmentStoreOp			stencilStoreOp;
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,		// VkImageLayout				initialLayout;
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,		// VkImageLayout				finalLayout;
-	};
-
-	const VkAttachmentReference		attachmentReference		=
-	{
-		0u,											// deUint32			attachment;
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL	// VkImageLayout	layout;
-	};
-
-
-	const VkSubpassDescription		subpassDescription		=
-	{
-		0u,												// VkSubpassDescriptionFlags	flags;
-		VK_PIPELINE_BIND_POINT_GRAPHICS,				// VkPipelineBindPoint			pipelineBindPoint;
-		0u,												// deUint32						inputAttachmentCount;
-		DE_NULL,										// const VkAttachmentReference*	pInputAttachments;
-		1u,												// deUint32						colorAttachmentCount;
-		&attachmentReference,							// const VkAttachmentReference*	pColorAttachments;
-		DE_NULL,										// const VkAttachmentReference*	pResolveAttachments;
-		DE_NULL,										// const VkAttachmentReference*	pDepthStencilAttachment;
-		0u,												// deUint32						preserveAttachmentCount;
-		DE_NULL											// const VkAttachmentReference*	pPreserveAttachments;
-	};
-
-	const VkRenderPassCreateInfo	renderPassParams		=
-	{
-		VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,		// VkStructureType					sType;
-		DE_NULL,										// const void*						pNext;
-		0u,												// VkRenderPassCreateFlags			flags;
-		1u,												// deUint32							attachmentCount;
-		&attachmentDescription,							// const VkAttachmentDescription*	pAttachments;
-		1u,												// deUint32							subpassCount;
-		&subpassDescription,							// const VkSubpassDescription*		pSubpasses;
-		0u,												// deUint32							dependencyCount;
-		DE_NULL											// const VkSubpassDependency*		pDependencies;
-	};
-
-	return vk::createRenderPass(vk, vkDevice, &renderPassParams);
+	return vk::makeRenderPass(vk, vkDevice, format);
 }
 
 vk::Move<VkFramebuffer> UniformBlockCaseInstance::createFramebuffer (vk::VkRenderPass renderPass, vk::VkImageView colorImageView) const
@@ -2057,176 +2123,20 @@ vk::Move<VkPipeline> UniformBlockCaseInstance::createPipeline (vk::VkShaderModul
 	const VkDevice									vkDevice				= m_context.getDevice();
 	const DeviceInterface&							vk						= m_context.getDeviceInterface();
 
-	const VkVertexInputBindingDescription			vertexBinding			=
-	{
-		0,									// deUint32					binding;
-		(deUint32)sizeof(float) * 4,		// deUint32					strideInBytes;
-		VK_VERTEX_INPUT_RATE_VERTEX			// VkVertexInputStepRate	inputRate;
-	};
+	const std::vector<VkViewport>					viewports				(1, makeViewport(tcu::UVec2(RENDER_WIDTH, RENDER_HEIGHT)));
+	const std::vector<VkRect2D>						scissors				(1, makeRect2D(tcu::UVec2(RENDER_WIDTH, RENDER_HEIGHT)));
 
-	const VkVertexInputAttributeDescription			vertexAttribute			=
-	{
-		0,									// deUint32		location;
-		0,									// deUint32		binding;
-		VK_FORMAT_R32G32B32A32_SFLOAT,		// VkFormat		format;
-		0u									// deUint32		offset;
-	};
-
-	const VkPipelineShaderStageCreateInfo			shaderStages[2]	=
-	{
-		{
-			VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,	// VkStructureType					sType;
-			DE_NULL,												// const void*						pNext;
-			0u,														// VkPipelineShaderStageCreateFlags	flags;
-			VK_SHADER_STAGE_VERTEX_BIT,								// VkShaderStageFlagBits			stage;
-			vtxShaderModule,										// VkShaderModule					module;
-			"main",													// const char*						pName;
-			DE_NULL													// const VkSpecializationInfo*		pSpecializationInfo;
-		},
-		{
-			VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,	// VkStructureType					sType;
-			DE_NULL,												// const void*						pNext;
-			0u,														// VkPipelineShaderStageCreateFlags flags;
-			VK_SHADER_STAGE_FRAGMENT_BIT,							// VkShaderStageFlagBits			stage;
-			fragShaderModule,										// VkShaderModule					module;
-			"main",													// const char*						pName;
-			DE_NULL													// const VkSpecializationInfo*		pSpecializationInfo;
-		}
-	};
-
-	const VkPipelineVertexInputStateCreateInfo		vertexInputStateParams		=
-	{
-		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,	// VkStructureType							sType;
-		DE_NULL,													// const void*								pNext;
-		0u,															// VkPipelineVertexInputStateCreateFlags	flags;
-		1u,															// deUint32									vertexBindingDescriptionCount;
-		&vertexBinding,												// const VkVertexInputBindingDescription*	pVertexBindingDescriptions;
-		1u,															// deUint32									vertexAttributeDescriptionCount;
-		&vertexAttribute,											// const VkVertexInputAttributeDescription*	pVertexAttributeDescriptions;
-	};
-
-	const VkPipelineInputAssemblyStateCreateInfo	inputAssemblyStateParams	=
-	{
-		VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,// VkStructureType							sType;
-		DE_NULL,													// const void*								pNext;
-		0u,															// VkPipelineInputAssemblyStateCreateFlags	flags;
-		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,						// VkPrimitiveTopology						topology;
-		false														// VkBool32									primitiveRestartEnable;
-	};
-
-	const VkViewport								viewport					=
-	{
-		0.0f,					// float	originX;
-		0.0f,					// float	originY;
-		(float)RENDER_WIDTH,	// float	width;
-		(float)RENDER_HEIGHT,	// float	height;
-		0.0f,					// float	minDepth;
-		1.0f					// float	maxDepth;
-	};
-
-
-	const VkRect2D									scissor						=
-	{
-		{
-			0u,				// deUint32	x;
-			0u,				// deUint32	y;
-		},						// VkOffset2D	offset;
-		{
-			RENDER_WIDTH,	// deUint32	width;
-			RENDER_HEIGHT,	// deUint32	height;
-		},						// VkExtent2D	extent;
-	};
-
-	const VkPipelineViewportStateCreateInfo			viewportStateParams			=
-	{
-		VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,		// VkStructureType						sType;
-		DE_NULL,													// const void*							pNext;
-		0u,															// VkPipelineViewportStateCreateFlags	flags;
-		1u,															// deUint32								viewportCount;
-		&viewport,													// const VkViewport*					pViewports;
-		1u,															// deUint32								scissorsCount;
-		&scissor,													// const VkRect2D*						pScissors;
-	};
-
-	const VkPipelineRasterizationStateCreateInfo	rasterStateParams			=
-	{
-		VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, // VkStructureType							sType;
-		DE_NULL,													// const void*								pNext;
-		0u,															// VkPipelineRasterizationStateCreateFlags	flags;
-		false,														// VkBool32									depthClampEnable;
-		false,														// VkBool32									rasterizerDiscardEnable;
-		VK_POLYGON_MODE_FILL,										// VkPolygonMode							polygonMode;
-		VK_CULL_MODE_NONE,											// VkCullModeFlags							cullMode;
-		VK_FRONT_FACE_COUNTER_CLOCKWISE,							// VkFrontFace								frontFace;
-		false,														// VkBool32									depthBiasEnable;
-		0.0f,														// float									depthBiasConstantFactor;
-		0.0f,														// float									depthBiasClamp;
-		0.0f,														// float									depthBiasSlopeFactor;
-		1.0f,														// float									lineWidth;
-	};
-
-	const VkPipelineMultisampleStateCreateInfo		multisampleStateParams =
-	{
-		VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,	// VkStructureType							sType;
-		DE_NULL,													// const void*								pNext;
-		0u,															// VkPipelineMultisampleStateCreateFlags	flags;
-		VK_SAMPLE_COUNT_1_BIT,										// VkSampleCountFlagBits					rasterizationSamples;
-		VK_FALSE,													// VkBool32									sampleShadingEnable;
-		0.0f,														// float									minSampleShading;
-		DE_NULL,													// const VkSampleMask*						pSampleMask;
-		VK_FALSE,													// VkBool32									alphaToCoverageEnable;
-		VK_FALSE													// VkBool32									alphaToOneEnable;
-	 };
-
-	const VkPipelineColorBlendAttachmentState		colorBlendAttachmentState	=
-	{
-		false,																		// VkBool32			blendEnable;
-		VK_BLEND_FACTOR_ONE,														// VkBlend			srcBlendColor;
-		VK_BLEND_FACTOR_ZERO,														// VkBlend			destBlendColor;
-		VK_BLEND_OP_ADD,															// VkBlendOp		blendOpColor;
-		VK_BLEND_FACTOR_ONE,														// VkBlend			srcBlendAlpha;
-		VK_BLEND_FACTOR_ZERO,														// VkBlend			destBlendAlpha;
-		VK_BLEND_OP_ADD,															// VkBlendOp		blendOpAlpha;
-		VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |						// VkChannelFlags	channelWriteMask;
-		VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-	};
-
-	const VkPipelineColorBlendStateCreateInfo		colorBlendStateParams		=
-	{
-		VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,	// VkStructureType								sType;
-		DE_NULL,													// const void*									pNext;
-		0u,															// VkPipelineColorBlendStateCreateFlags			flags;
-		false,														// VkBool32										logicOpEnable;
-		VK_LOGIC_OP_COPY,											// VkLogicOp									logicOp;
-		1u,															// deUint32										attachmentCount;
-		&colorBlendAttachmentState,									// const VkPipelineColorBlendAttachmentState*	pAttachments;
-		{ 0.0f, 0.0f, 0.0f, 0.0f },									// float										blendConstants[4];
-	};
-
-	const VkGraphicsPipelineCreateInfo				graphicsPipelineParams		=
-	{
-		VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,	// VkStructureType									sType;
-		DE_NULL,											// const void*										pNext;
-		0u,													// VkPipelineCreateFlags							flags;
-		2u,													// deUint32											stageCount;
-		shaderStages,										// const VkPipelineShaderStageCreateInfo*			pStages;
-		&vertexInputStateParams,							// const VkPipelineVertexInputStateCreateInfo*		pVertexInputState;
-		&inputAssemblyStateParams,							// const VkPipelineInputAssemblyStateCreateInfo*	pInputAssemblyState;
-		DE_NULL,											// const VkPipelineTessellationStateCreateInfo*		pTessellationState;
-		&viewportStateParams,								// const VkPipelineViewportStateCreateInfo*			pViewportState;
-		&rasterStateParams,									// const VkPipelineRasterizationStateCreateInfo*	pRasterizationState;
-		&multisampleStateParams,							// const VkPipelineMultisampleStateCreateInfo*		pMultisampleState;
-		DE_NULL,											// const VkPipelineDepthStencilStateCreateInfo*		pDepthStencilState;
-		&colorBlendStateParams,								// const VkPipelineColorBlendStateCreateInfo*		pColorBlendState;
-		(const VkPipelineDynamicStateCreateInfo*)DE_NULL,	// const VkPipelineDynamicStateCreateInfo*			pDynamicState;
-		pipelineLayout,										// VkPipelineLayout									layout;
-		renderPass,											// VkRenderPass										renderPass;
-		0u,													// deUint32											subpass;
-		0u,													// VkPipeline										basePipelineHandle;
-		0u													// deInt32											basePipelineIndex;
-	};
-
-	return vk::createGraphicsPipeline(vk, vkDevice, DE_NULL, &graphicsPipelineParams);
+	return vk::makeGraphicsPipeline(vk,					// const DeviceInterface&            vk
+									vkDevice,			// const VkDevice                    device
+									pipelineLayout,		// const VkPipelineLayout            pipelineLayout
+									vtxShaderModule,	// const VkShaderModule              vertexShaderModule
+									DE_NULL,			// const VkShaderModule              tessellationControlShaderModule
+									DE_NULL,			// const VkShaderModule              tessellationEvalShaderModule
+									DE_NULL,			// const VkShaderModule              geometryShaderModule
+									fragShaderModule,	// const VkShaderModule              fragmentShaderModule
+									renderPass,			// const VkRenderPass                renderPass
+									viewports,			// const std::vector<VkViewport>&    viewports
+									scissors);			// const std::vector<VkRect2D>&      scissors
 }
 
 } // anonymous (utilities)
@@ -2256,11 +2166,18 @@ void UniformBlockCase::initPrograms (vk::SourceCollections& programCollection) c
 
 TestInstance* UniformBlockCase::createInstance (Context& context) const
 {
+	if (!context.get16BitStorageFeatures().uniformAndStorageBuffer16BitAccess && uses16BitStorage(m_interface))
+		TCU_THROW(NotSupportedError, "uniformAndStorageBuffer16BitAccess not supported");
+	if (!context.get8BitStorageFeatures().uniformAndStorageBuffer8BitAccess && uses8BitStorage(m_interface))
+		TCU_THROW(NotSupportedError, "uniformAndStorageBuffer8BitAccess not supported");
+
 	return new UniformBlockCaseInstance(context, m_bufferMode, m_uniformLayout, m_blockPointers);
 }
 
 void UniformBlockCase::init (void)
 {
+	const int vec4Alignment = (int)sizeof(deUint32)*4;
+
 	// Compute reference layout.
 	computeStd140Layout(m_uniformLayout, m_interface);
 
@@ -2268,7 +2185,10 @@ void UniformBlockCase::init (void)
 	{
 		int totalSize = 0;
 		for (std::vector<BlockLayoutEntry>::const_iterator blockIter = m_uniformLayout.blocks.begin(); blockIter != m_uniformLayout.blocks.end(); blockIter++)
-			totalSize += blockIter->size;
+		{
+			// Include enough space for alignment of individual blocks
+			totalSize += deRoundUp32(blockIter->size, vec4Alignment);
+		}
 		m_data.resize(totalSize);
 
 		// Pointers for each block.
@@ -2276,7 +2196,9 @@ void UniformBlockCase::init (void)
 		for (int blockNdx = 0; blockNdx < (int)m_uniformLayout.blocks.size(); blockNdx++)
 		{
 			m_blockPointers[blockNdx] = &m_data[0] + curOffset;
-			curOffset += m_uniformLayout.blocks[blockNdx].size;
+
+			// Ensure each new block starts fully aligned to avoid unaligned host accesses
+			curOffset += deRoundUp32(m_uniformLayout.blocks[blockNdx].size, vec4Alignment);
 		}
 	}
 

@@ -27,9 +27,11 @@
 #include "vkMemUtil.hpp"
 #include "vkQueryUtil.hpp"
 #include "vkRefUtil.hpp"
+#include "vkCmdUtil.hpp"
 #include "tcuTextureUtil.hpp"
 #include "tcuAstcUtil.hpp"
 #include "deRandom.hpp"
+#include "deSharedPtr.hpp"
 
 namespace vkt
 {
@@ -126,6 +128,12 @@ bool isLinearFilteringSupported (const InstanceInterface& vki, VkPhysicalDevice 
 		case VK_FORMAT_R64G64_SFLOAT:
 		case VK_FORMAT_R64G64B64_SFLOAT:
 		case VK_FORMAT_R64G64B64A64_SFLOAT:
+		case VK_FORMAT_D16_UNORM:
+		case VK_FORMAT_X8_D24_UNORM_PACK32:
+		case VK_FORMAT_D32_SFLOAT:
+		case VK_FORMAT_D16_UNORM_S8_UINT:
+		case VK_FORMAT_D24_UNORM_S8_UINT:
+		case VK_FORMAT_D32_SFLOAT_S8_UINT:
 			return (formatFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0;
 
 		default:
@@ -133,6 +141,16 @@ bool isLinearFilteringSupported (const InstanceInterface& vki, VkPhysicalDevice 
 			//						   and we have tests to verify format properties.
 			return true;
 	}
+}
+
+bool isMinMaxFilteringSupported (const InstanceInterface& vki, VkPhysicalDevice physicalDevice, VkFormat format, VkImageTiling tiling)
+{
+	const VkFormatProperties	formatProperties	= getPhysicalDeviceFormatProperties(vki, physicalDevice, format);
+	const VkFormatFeatureFlags	formatFeatures		= tiling == VK_IMAGE_TILING_LINEAR
+													? formatProperties.linearTilingFeatures
+													: formatProperties.optimalTilingFeatures;
+
+	return (formatFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_MINMAX_BIT_EXT) != 0;
 }
 
 VkBorderColor getFormatBorderColor (BorderColor color, VkFormat format)
@@ -279,14 +297,6 @@ de::MovePtr<tcu::TextureLevel> readColorAttachment (const vk::DeviceInterface&	v
 		pixelDataSize								// VkDeviceSize		size;
 	};
 
-	const VkCommandBufferBeginInfo cmdBufferBeginInfo =
-	{
-		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,			// VkStructureType					sType;
-		DE_NULL,												// const void*						pNext;
-		VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,			// VkCommandBufferUsageFlags		flags;
-		(const VkCommandBufferInheritanceInfo*)DE_NULL,
-	};
-
 	// Copy image to buffer
 
 	const VkBufferImageCopy copyRegion =
@@ -299,27 +309,13 @@ de::MovePtr<tcu::TextureLevel> readColorAttachment (const vk::DeviceInterface&	v
 		{ renderSize.x(), renderSize.y(), 1u }			// VkExtent3D				imageExtent;
 	};
 
-	VK_CHECK(vk.beginCommandBuffer(*cmdBuffer, &cmdBufferBeginInfo));
+	beginCommandBuffer(vk, *cmdBuffer);
 	vk.cmdPipelineBarrier(*cmdBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, (VkDependencyFlags)0, 0, (const VkMemoryBarrier*)DE_NULL, 0, (const VkBufferMemoryBarrier*)DE_NULL, 1, &imageBarrier);
 	vk.cmdCopyImageToBuffer(*cmdBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, *buffer, 1, &copyRegion);
 	vk.cmdPipelineBarrier(*cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, (VkDependencyFlags)0, 0, (const VkMemoryBarrier*)DE_NULL, 1, &bufferBarrier, 0, (const VkImageMemoryBarrier*)DE_NULL);
-	VK_CHECK(vk.endCommandBuffer(*cmdBuffer));
+	endCommandBuffer(vk, *cmdBuffer);
 
-	const VkSubmitInfo submitInfo =
-	{
-		VK_STRUCTURE_TYPE_SUBMIT_INFO,	// VkStructureType			sType;
-		DE_NULL,						// const void*				pNext;
-		0u,								// deUint32					waitSemaphoreCount;
-		DE_NULL,						// const VkSemaphore*		pWaitSemaphores;
-		DE_NULL,
-		1u,								// deUint32					commandBufferCount;
-		&cmdBuffer.get(),				// const VkCommandBuffer*	pCommandBuffers;
-		0u,								// deUint32					signalSemaphoreCount;
-		DE_NULL							// const VkSemaphore*		pSignalSemaphores;
-	};
-
-	VK_CHECK(vk.queueSubmit(queue, 1, &submitInfo, *fence));
-	VK_CHECK(vk.waitForFences(device, 1, &fence.get(), 0, ~(0ull) /* infinity */));
+	submitCommandsAndWait(vk, device, queue, cmdBuffer.get());
 
 	// Read buffer data
 	invalidateMappedMemoryRange(vk, device, bufferAlloc->getMemory(), bufferAlloc->getOffset(), VK_WHOLE_SIZE);
@@ -328,48 +324,24 @@ de::MovePtr<tcu::TextureLevel> readColorAttachment (const vk::DeviceInterface&	v
 	return resultLevel;
 }
 
-namespace
+void uploadTestTextureInternal (const DeviceInterface&	vk,
+								VkDevice				device,
+								VkQueue					queue,
+								deUint32				queueFamilyIndex,
+								Allocator&				allocator,
+								const TestTexture&		srcTexture,
+								const TestTexture*		srcStencilTexture,
+								tcu::TextureFormat		format,
+								VkImage					destImage)
 {
-
-VkImageAspectFlags getImageAspectFlags (const tcu::TextureFormat textureFormat)
-{
-	VkImageAspectFlags imageAspectFlags = 0;
-
-	if (tcu::hasDepthComponent(textureFormat.order))
-		imageAspectFlags |= VK_IMAGE_ASPECT_DEPTH_BIT;
-
-	if (tcu::hasStencilComponent(textureFormat.order))
-		imageAspectFlags |= VK_IMAGE_ASPECT_STENCIL_BIT;
-
-	if (imageAspectFlags == 0)
-		imageAspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
-
-	return imageAspectFlags;
-}
-
-} // anonymous
-
-void uploadTestTextureInternal (const DeviceInterface&			vk,
-								VkDevice						device,
-								VkQueue							queue,
-								deUint32						queueFamilyIndex,
-								Allocator&						allocator,
-								const TestTexture&				srcTexture,
-								const TestTexture*				srcStencilTexture,
-								tcu::TextureFormat				format,
-								VkImage							destImage)
-{
-	deUint32						bufferSize;
 	Move<VkBuffer>					buffer;
 	de::MovePtr<Allocation>			bufferAlloc;
 	Move<VkCommandPool>				cmdPool;
 	Move<VkCommandBuffer>			cmdBuffer;
-	Move<VkFence>					fence;
 	const VkImageAspectFlags		imageAspectFlags	= getImageAspectFlags(format);
 	deUint32						stencilOffset		= 0u;
-
-	// Calculate buffer size
-	bufferSize =  (srcTexture.isCompressed())? srcTexture.getCompressedSize(): srcTexture.getSize();
+	std::vector<VkBufferImageCopy>	copyRegions			= srcTexture.getBufferCopyRegions();
+	deUint32						bufferSize			= (srcTexture.isCompressed())? srcTexture.getCompressedSize(): srcTexture.getSize();
 
 	// Stencil-only texture should be provided if (and only if) the image has a combined DS format
 	DE_ASSERT((tcu::hasDepthComponent(format.order) && tcu::hasStencilComponent(format.order)) == (srcStencilTexture != DE_NULL));
@@ -384,6 +356,98 @@ void uploadTestTextureInternal (const DeviceInterface&			vk,
 	{
 		const VkBufferCreateInfo bufferParams =
 		{
+			VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,	// VkStructureType      sType;
+			DE_NULL,								// const void*          pNext;
+			0u,										// VkBufferCreateFlags  flags;
+			bufferSize,								// VkDeviceSize         size;
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,		// VkBufferUsageFlags   usage;
+			VK_SHARING_MODE_EXCLUSIVE,				// VkSharingMode        sharingMode;
+			0u,										// deUint32             queueFamilyIndexCount;
+			DE_NULL,								// const deUint32*      pQueueFamilyIndices;
+		};
+
+		buffer		= createBuffer(vk, device, &bufferParams);
+		bufferAlloc	= allocator.allocate(getBufferMemoryRequirements(vk, device, *buffer), MemoryRequirement::HostVisible);
+		VK_CHECK(vk.bindBufferMemory(device, *buffer, bufferAlloc->getMemory(), bufferAlloc->getOffset()));
+	}
+
+	// Write buffer data
+	{
+		srcTexture.write(reinterpret_cast<deUint8*>(bufferAlloc->getHostPtr()));
+
+		if (srcStencilTexture != DE_NULL)
+		{
+			DE_ASSERT(stencilOffset != 0u);
+
+			srcStencilTexture->write(reinterpret_cast<deUint8*>(bufferAlloc->getHostPtr()) + stencilOffset);
+
+			std::vector<VkBufferImageCopy>	stencilCopyRegions = srcStencilTexture->getBufferCopyRegions();
+			for (size_t regionIdx = 0; regionIdx < stencilCopyRegions.size(); regionIdx++)
+			{
+				VkBufferImageCopy region = stencilCopyRegions[regionIdx];
+				region.bufferOffset += stencilOffset;
+
+				copyRegions.push_back(region);
+			}
+		}
+
+		flushMappedMemoryRange(vk, device, bufferAlloc->getMemory(), bufferAlloc->getOffset(), VK_WHOLE_SIZE);
+	}
+
+	copyBufferToImage(vk, device, queue, queueFamilyIndex, *buffer, bufferSize, copyRegions, DE_NULL, imageAspectFlags, srcTexture.getNumLevels(), srcTexture.getArraySize(), destImage);
+}
+
+bool checkSparseImageFormatSupport (const VkPhysicalDevice		physicalDevice,
+									const InstanceInterface&	instance,
+									const VkImageCreateInfo&	imageCreateInfo)
+{
+	const std::vector<VkSparseImageFormatProperties> sparseImageFormatPropVec =
+		getPhysicalDeviceSparseImageFormatProperties(instance, physicalDevice, imageCreateInfo.format, imageCreateInfo.imageType, imageCreateInfo.samples, imageCreateInfo.usage, imageCreateInfo.tiling);
+
+	return (sparseImageFormatPropVec.size() != 0);
+}
+
+void uploadTestTextureInternalSparse (const DeviceInterface&					vk,
+									  VkDevice									device,
+									  const VkPhysicalDevice					physicalDevice,
+									  const InstanceInterface&					instance,
+									  const VkImageCreateInfo&					imageCreateInfo,
+									  VkQueue									universalQueue,
+									  deUint32									universalQueueFamilyIndex,
+									  VkQueue									sparseQueue,
+									  Allocator&								allocator,
+									  std::vector<de::SharedPtr<Allocation> >&	allocations,
+									  const TestTexture&						srcTexture,
+									  const TestTexture*						srcStencilTexture,
+									  tcu::TextureFormat						format,
+									  VkImage									destImage)
+{
+	deUint32						bufferSize				= (srcTexture.isCompressed()) ? srcTexture.getCompressedSize(): srcTexture.getSize();
+	const VkImageAspectFlags		imageAspectFlags		= getImageAspectFlags(format);
+	deUint32						stencilOffset			= 0u;
+	const Unique<VkSemaphore>		imageMemoryBindSemaphore(createSemaphore(vk, device));
+	Move<VkCommandPool>				cmdPool					= createCommandPool(vk, device, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, universalQueueFamilyIndex);
+	Move<VkCommandBuffer>			cmdBuffer				= allocateCommandBuffer(vk, device, *cmdPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+	Move<VkFence>					fence					= createFence(vk, device);
+	std::vector<VkBufferImageCopy>	copyRegions				= srcTexture.getBufferCopyRegions();
+	Move<VkBuffer>					buffer;
+	de::MovePtr<Allocation>			bufferAlloc;
+
+	// Stencil-only texture should be provided if (and only if) the image has a combined DS format
+	DE_ASSERT((tcu::hasDepthComponent(format.order) && tcu::hasStencilComponent(format.order)) == (srcStencilTexture != DE_NULL));
+
+	if (srcStencilTexture != DE_NULL)
+	{
+		stencilOffset	= static_cast<deUint32>(deAlign32(static_cast<deInt32>(bufferSize), 4));
+		bufferSize		= stencilOffset + srcStencilTexture->getSize();
+	}
+
+	allocateAndBindSparseImage (vk, device, physicalDevice, instance, imageCreateInfo, imageMemoryBindSemaphore.get(), sparseQueue, allocator, allocations, format, destImage);
+
+	{
+		// Create source buffer
+		const VkBufferCreateInfo bufferParams =
+		{
 			VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,		// VkStructureType		sType;
 			DE_NULL,									// const void*			pNext;
 			0u,											// VkBufferCreateFlags	flags;
@@ -395,125 +459,35 @@ void uploadTestTextureInternal (const DeviceInterface&			vk,
 		};
 
 		buffer		= createBuffer(vk, device, &bufferParams);
-		bufferAlloc = allocator.allocate(getBufferMemoryRequirements(vk, device, *buffer), MemoryRequirement::HostVisible);
+		bufferAlloc	= allocator.allocate(getBufferMemoryRequirements(vk, device, *buffer), MemoryRequirement::HostVisible);
+
 		VK_CHECK(vk.bindBufferMemory(device, *buffer, bufferAlloc->getMemory(), bufferAlloc->getOffset()));
 	}
 
-	// Create command pool and buffer
-	cmdPool		= createCommandPool(vk, device, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, queueFamilyIndex);
-	cmdBuffer	= allocateCommandBuffer(vk, device, *cmdPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-
-	// Create fence
-	fence = createFence(vk, device);
-
-	// Barriers for copying buffer to image
-	const VkBufferMemoryBarrier preBufferBarrier =
 	{
-		VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,	// VkStructureType	sType;
-		DE_NULL,									// const void*		pNext;
-		VK_ACCESS_HOST_WRITE_BIT,					// VkAccessFlags	srcAccessMask;
-		VK_ACCESS_TRANSFER_READ_BIT,				// VkAccessFlags	dstAccessMask;
-		VK_QUEUE_FAMILY_IGNORED,					// deUint32			srcQueueFamilyIndex;
-		VK_QUEUE_FAMILY_IGNORED,					// deUint32			dstQueueFamilyIndex;
-		*buffer,									// VkBuffer			buffer;
-		0u,											// VkDeviceSize		offset;
-		bufferSize									// VkDeviceSize		size;
-	};
+		// Write buffer data
+		srcTexture.write(reinterpret_cast<deUint8*>(bufferAlloc->getHostPtr()));
 
-	const VkImageMemoryBarrier preImageBarrier =
-	{
-		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,			// VkStructureType			sType;
-		DE_NULL,										// const void*				pNext;
-		0u,												// VkAccessFlags			srcAccessMask;
-		VK_ACCESS_TRANSFER_WRITE_BIT,					// VkAccessFlags			dstAccessMask;
-		VK_IMAGE_LAYOUT_UNDEFINED,						// VkImageLayout			oldLayout;
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,			// VkImageLayout			newLayout;
-		VK_QUEUE_FAMILY_IGNORED,						// deUint32					srcQueueFamilyIndex;
-		VK_QUEUE_FAMILY_IGNORED,						// deUint32					dstQueueFamilyIndex;
-		destImage,										// VkImage					image;
-		{												// VkImageSubresourceRange	subresourceRange;
-			imageAspectFlags,						// VkImageAspectFlags	aspectMask;
-			0u,										// deUint32				baseMipLevel;
-			(deUint32)srcTexture.getNumLevels(),	// deUint32				mipLevels;
-			0u,										// deUint32				baseArraySlice;
-			(deUint32)srcTexture.getArraySize(),	// deUint32				arraySize;
-		}
-	};
-
-	const VkImageMemoryBarrier postImageBarrier =
-	{
-		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,			// VkStructureType			sType;
-		DE_NULL,										// const void*				pNext;
-		VK_ACCESS_TRANSFER_WRITE_BIT,					// VkAccessFlags			srcAccessMask;
-		VK_ACCESS_SHADER_READ_BIT,						// VkAccessFlags			dstAccessMask;
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,			// VkImageLayout			oldLayout;
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,		// VkImageLayout			newLayout;
-		VK_QUEUE_FAMILY_IGNORED,						// deUint32					srcQueueFamilyIndex;
-		VK_QUEUE_FAMILY_IGNORED,						// deUint32					dstQueueFamilyIndex;
-		destImage,										// VkImage					image;
-		{												// VkImageSubresourceRange	subresourceRange;
-			imageAspectFlags,						// VkImageAspectFlags	aspectMask;
-			0u,										// deUint32				baseMipLevel;
-			(deUint32)srcTexture.getNumLevels(),	// deUint32				mipLevels;
-			0u,										// deUint32				baseArraySlice;
-			(deUint32)srcTexture.getArraySize(),	// deUint32				arraySize;
-		}
-	};
-
-	const VkCommandBufferBeginInfo cmdBufferBeginInfo =
-	{
-		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,	// VkStructureType					sType;
-		DE_NULL,										// const void*						pNext;
-		VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,	// VkCommandBufferUsageFlags		flags;
-		(const VkCommandBufferInheritanceInfo*)DE_NULL,
-	};
-
-	std::vector<VkBufferImageCopy>	copyRegions		= srcTexture.getBufferCopyRegions();
-
-	// Write buffer data
-	srcTexture.write(reinterpret_cast<deUint8*>(bufferAlloc->getHostPtr()));
-
-	if (srcStencilTexture != DE_NULL)
-	{
-		DE_ASSERT(stencilOffset != 0u);
-
-		srcStencilTexture->write(reinterpret_cast<deUint8*>(bufferAlloc->getHostPtr()) + stencilOffset);
-
-		std::vector<VkBufferImageCopy>	stencilCopyRegions = srcStencilTexture->getBufferCopyRegions();
-		for (size_t regionIdx = 0; regionIdx < stencilCopyRegions.size(); regionIdx++)
+		if (srcStencilTexture != DE_NULL)
 		{
-			VkBufferImageCopy region = stencilCopyRegions[regionIdx];
-			region.bufferOffset += stencilOffset;
+			DE_ASSERT(stencilOffset != 0u);
 
-			copyRegions.push_back(region);
+			srcStencilTexture->write(reinterpret_cast<deUint8*>(bufferAlloc->getHostPtr()) + stencilOffset);
+
+			std::vector<VkBufferImageCopy>	stencilCopyRegions = srcStencilTexture->getBufferCopyRegions();
+			for (size_t regionIdx = 0; regionIdx < stencilCopyRegions.size(); regionIdx++)
+			{
+				VkBufferImageCopy region = stencilCopyRegions[regionIdx];
+				region.bufferOffset += stencilOffset;
+
+				copyRegions.push_back(region);
+			}
 		}
+
+		flushMappedMemoryRange(vk, device, bufferAlloc->getMemory(), bufferAlloc->getOffset(), VK_WHOLE_SIZE);
 	}
 
-	flushMappedMemoryRange(vk, device, bufferAlloc->getMemory(), bufferAlloc->getOffset(), VK_WHOLE_SIZE);
-
-	// Copy buffer to image
-	VK_CHECK(vk.beginCommandBuffer(*cmdBuffer, &cmdBufferBeginInfo));
-	vk.cmdPipelineBarrier(*cmdBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, (VkDependencyFlags)0, 0, (const VkMemoryBarrier*)DE_NULL, 1, &preBufferBarrier, 1, &preImageBarrier);
-	vk.cmdCopyBufferToImage(*cmdBuffer, *buffer, destImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (deUint32)copyRegions.size(), copyRegions.data());
-	vk.cmdPipelineBarrier(*cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, (VkDependencyFlags)0, 0, (const VkMemoryBarrier*)DE_NULL, 0, (const VkBufferMemoryBarrier*)DE_NULL, 1, &postImageBarrier);
-
-	VK_CHECK(vk.endCommandBuffer(*cmdBuffer));
-
-	const VkSubmitInfo submitInfo =
-	{
-		VK_STRUCTURE_TYPE_SUBMIT_INFO,	// VkStructureType			sType;
-		DE_NULL,						// const void*				pNext;
-		0u,								// deUint32					waitSemaphoreCount;
-		DE_NULL,						// const VkSemaphore*		pWaitSemaphores;
-		DE_NULL,
-		1u,								// deUint32					commandBufferCount;
-		&cmdBuffer.get(),				// const VkCommandBuffer*	pCommandBuffers;
-		0u,								// deUint32					signalSemaphoreCount;
-		DE_NULL							// const VkSemaphore*		pSignalSemaphores;
-	};
-
-	VK_CHECK(vk.queueSubmit(queue, 1, &submitInfo, *fence));
-	VK_CHECK(vk.waitForFences(device, 1, &fence.get(), true, ~(0ull) /* infinity */));
+	copyBufferToImage(vk, device, universalQueue, universalQueueFamilyIndex, *buffer, bufferSize, copyRegions, &(*imageMemoryBindSemaphore), imageAspectFlags, imageCreateInfo.mipLevels, imageCreateInfo.arrayLayers, destImage);
 }
 
 void uploadTestTexture (const DeviceInterface&			vk,
@@ -532,19 +506,20 @@ void uploadTestTexture (const DeviceInterface&			vk,
 		if (tcu::hasDepthComponent(srcTexture.getTextureFormat().order))
 		{
 			tcu::TextureFormat format;
-			switch (srcTexture.getTextureFormat().type) {
-			case tcu::TextureFormat::UNSIGNED_INT_16_8_8:
-				format = tcu::TextureFormat(tcu::TextureFormat::D, tcu::TextureFormat::UNORM_INT16);
-				break;
-			case tcu::TextureFormat::UNSIGNED_INT_24_8_REV:
-				format = tcu::TextureFormat(tcu::TextureFormat::D, tcu::TextureFormat::UNSIGNED_INT_24_8_REV);
-				break;
-			case tcu::TextureFormat::FLOAT_UNSIGNED_INT_24_8_REV:
-				format = tcu::TextureFormat(tcu::TextureFormat::D, tcu::TextureFormat::FLOAT);
-				break;
-			default:
-				DE_ASSERT(0);
-				break;
+			switch (srcTexture.getTextureFormat().type)
+			{
+				case tcu::TextureFormat::UNSIGNED_INT_16_8_8:
+					format = tcu::TextureFormat(tcu::TextureFormat::D, tcu::TextureFormat::UNORM_INT16);
+					break;
+				case tcu::TextureFormat::UNSIGNED_INT_24_8_REV:
+					format = tcu::TextureFormat(tcu::TextureFormat::D, tcu::TextureFormat::UNSIGNED_INT_24_8_REV);
+					break;
+				case tcu::TextureFormat::FLOAT_UNSIGNED_INT_24_8_REV:
+					format = tcu::TextureFormat(tcu::TextureFormat::D, tcu::TextureFormat::FLOAT);
+					break;
+				default:
+					DE_FATAL("Unexpected source texture format.");
+					break;
 			}
 			srcDepthTexture = srcTexture.copy(format);
 		}
@@ -556,6 +531,82 @@ void uploadTestTexture (const DeviceInterface&			vk,
 	}
 	else
 		uploadTestTextureInternal(vk, device, queue, queueFamilyIndex, allocator, srcTexture, DE_NULL, srcTexture.getTextureFormat(), destImage);
+}
+
+void uploadTestTextureSparse (const DeviceInterface&					vk,
+							  VkDevice									device,
+							  const VkPhysicalDevice					physicalDevice,
+							  const InstanceInterface&					instance,
+							  const VkImageCreateInfo&					imageCreateInfo,
+							  VkQueue									universalQueue,
+							  deUint32									universalQueueFamilyIndex,
+							  VkQueue									sparseQueue,
+							  Allocator&								allocator,
+							  std::vector<de::SharedPtr<Allocation> >&	allocations,
+							  const TestTexture&						srcTexture,
+							  VkImage									destImage)
+{
+	if (tcu::isCombinedDepthStencilType(srcTexture.getTextureFormat().type))
+	{
+		de::MovePtr<TestTexture> srcDepthTexture;
+		de::MovePtr<TestTexture> srcStencilTexture;
+
+		if (tcu::hasDepthComponent(srcTexture.getTextureFormat().order))
+		{
+			tcu::TextureFormat format;
+			switch (srcTexture.getTextureFormat().type)
+			{
+				case tcu::TextureFormat::UNSIGNED_INT_16_8_8:
+					format = tcu::TextureFormat(tcu::TextureFormat::D, tcu::TextureFormat::UNORM_INT16);
+					break;
+				case tcu::TextureFormat::UNSIGNED_INT_24_8_REV:
+					format = tcu::TextureFormat(tcu::TextureFormat::D, tcu::TextureFormat::UNSIGNED_INT_24_8_REV);
+					break;
+				case tcu::TextureFormat::FLOAT_UNSIGNED_INT_24_8_REV:
+					format = tcu::TextureFormat(tcu::TextureFormat::D, tcu::TextureFormat::FLOAT);
+					break;
+				default:
+					DE_FATAL("Unexpected source texture format.");
+					break;
+			}
+			srcDepthTexture = srcTexture.copy(format);
+		}
+
+		if (tcu::hasStencilComponent(srcTexture.getTextureFormat().order))
+			srcStencilTexture = srcTexture.copy(tcu::getEffectiveDepthStencilTextureFormat(srcTexture.getTextureFormat(), tcu::Sampler::MODE_STENCIL));
+
+		uploadTestTextureInternalSparse	(vk,
+										 device,
+										 physicalDevice,
+										 instance,
+										 imageCreateInfo,
+										 universalQueue,
+										 universalQueueFamilyIndex,
+										 sparseQueue,
+										 allocator,
+										 allocations,
+										 *srcDepthTexture,
+										 srcStencilTexture.get(),
+										 srcTexture.getTextureFormat(),
+										 destImage);
+	}
+	else
+	{
+		uploadTestTextureInternalSparse	(vk,
+										 device,
+										 physicalDevice,
+										 instance,
+										 imageCreateInfo,
+										 universalQueue,
+										 universalQueueFamilyIndex,
+										 sparseQueue,
+										 allocator,
+										 allocations,
+										 srcTexture,
+										 DE_NULL,
+										 srcTexture.getTextureFormat(),
+										 destImage);
+	}
 }
 
 // Utilities for test textures

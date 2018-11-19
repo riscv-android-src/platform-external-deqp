@@ -685,7 +685,7 @@ void WideColorSurfaceTest::init (void)
 	if (numConfigs <= 0)
 	{
 		log << tcu::TestLog::Message << "No configs returned." << tcu::TestLog::EndMessage;
-		TCU_FAIL("No configs returned");
+		TCU_THROW(NotSupportedError, "No configs available with the requested attributes");
 	}
 
 	log << tcu::TestLog::Message << numConfigs << " configs returned" << tcu::TestLog::EndMessage;
@@ -1133,7 +1133,7 @@ void WideColorSurfaceTest::doClearTest (EGLSurface surface)
 				clearColorScreen(m_gl, clearColor2);
 				GLU_EXPECT_NO_ERROR(m_gl.getError(), "Clear to 1.0f - reference value");
 
-				const ColoredRect	coloredRect	(IVec2(0.0f, 0.0f), IVec2(1.0f, 1.0f), clearColor);
+				const ColoredRect	coloredRect	(IVec2(0, 0), IVec2(1, 1), clearColor);
 				gles2Renderer.render(coloredRect);
 				testPixels(reference, it->increment);
 
