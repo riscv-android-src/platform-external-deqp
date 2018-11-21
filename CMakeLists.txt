@@ -1,6 +1,10 @@
 # dEQP cmake file
 
-cmake_minimum_required(VERSION 2.8)
+# Module FindGit requires cmake >= 2.8.2
+cmake_minimum_required(VERSION 2.8.2)
+
+find_package(Git)
+find_package(PythonInterp 2)
 
 # dEQP Target.
 set(DEQP_TARGET "default" CACHE STRING "dEQP Target (default, android...)")
@@ -83,6 +87,13 @@ add_subdirectory(external/glslang)
 
 # spirv-tools
 add_subdirectory(external/spirv-tools)
+
+# spirv-headers
+set(SPIRV_INCLUDE_PATH "${PROJECT_SOURCE_DIR}/external/spirv-headers/src/include")
+if (NOT EXISTS ${SPIRV_INCLUDE_PATH})
+	message(FATAL_ERROR "SPIR-V headers not found, please run external/fetch_sources.py")
+endif()
+include_directories(${SPIRV_INCLUDE_PATH})
 
 include_directories(${PNG_INCLUDE_PATH})
 
@@ -287,6 +298,11 @@ if (DE_OS_IS_ANDROID)
 
 	add_library(deqp SHARED ${DEQP_SRCS})
 	target_link_libraries(deqp ${DEQP_LIBS})
+
+	# Separate out the debug information because it's enormous
+	add_custom_command(TARGET deqp POST_BUILD
+		COMMAND ${CMAKE_STRIP} --only-keep-debug -o $<TARGET_FILE:deqp>.debug $<TARGET_FILE:deqp>
+		COMMAND ${CMAKE_STRIP} -g $<TARGET_FILE:deqp>)
 
 	# Needed by OpenGL CTS that defines its own activity but depends on
 	# common Android support code.

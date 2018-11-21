@@ -251,6 +251,11 @@ template<> VkStructureType getStructureType<VkBindImageMemoryInfo> (void)
 	return VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_INFO;
 }
 
+template<> VkStructureType getStructureType<VkPhysicalDevice8BitStorageFeaturesKHR> (void)
+{
+	return VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES_KHR;
+}
+
 template<> VkStructureType getStructureType<VkPhysicalDevice16BitStorageFeatures> (void)
 {
 	return VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES;
@@ -806,9 +811,39 @@ template<> VkStructureType getStructureType<VkSurfaceFormat2KHR> (void)
 	return VK_STRUCTURE_TYPE_SURFACE_FORMAT_2_KHR;
 }
 
+template<> VkStructureType getStructureType<VkDisplayProperties2KHR> (void)
+{
+	return VK_STRUCTURE_TYPE_DISPLAY_PROPERTIES_2_KHR;
+}
+
+template<> VkStructureType getStructureType<VkDisplayPlaneProperties2KHR> (void)
+{
+	return VK_STRUCTURE_TYPE_DISPLAY_PLANE_PROPERTIES_2_KHR;
+}
+
+template<> VkStructureType getStructureType<VkDisplayModeProperties2KHR> (void)
+{
+	return VK_STRUCTURE_TYPE_DISPLAY_MODE_PROPERTIES_2_KHR;
+}
+
+template<> VkStructureType getStructureType<VkDisplayPlaneInfo2KHR> (void)
+{
+	return VK_STRUCTURE_TYPE_DISPLAY_PLANE_INFO_2_KHR;
+}
+
+template<> VkStructureType getStructureType<VkDisplayPlaneCapabilities2KHR> (void)
+{
+	return VK_STRUCTURE_TYPE_DISPLAY_PLANE_CAPABILITIES_2_KHR;
+}
+
 template<> VkStructureType getStructureType<VkImageFormatListCreateInfoKHR> (void)
 {
 	return VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO_KHR;
+}
+
+template<> VkStructureType getStructureType<VkPhysicalDeviceDriverPropertiesKHR> (void)
+{
+	return VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES_KHR;
 }
 
 template<> VkStructureType getStructureType<VkDebugReportCallbackCreateInfoEXT> (void)
@@ -1089,5 +1124,60 @@ template<> VkStructureType getStructureType<VkMemoryGetAndroidHardwareBufferInfo
 template<> VkStructureType getStructureType<VkExternalFormatANDROID> (void)
 {
 	return VK_STRUCTURE_TYPE_EXTERNAL_FORMAT_ANDROID;
+}
+
+template<> VkStructureType getStructureType<VkDescriptorSetLayoutBindingFlagsCreateInfoEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
+}
+
+template<> VkStructureType getStructureType<VkPhysicalDeviceDescriptorIndexingFeaturesEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+}
+
+template<> VkStructureType getStructureType<VkPhysicalDeviceDescriptorIndexingPropertiesEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES_EXT;
+}
+
+template<> VkStructureType getStructureType<VkDescriptorSetVariableDescriptorCountAllocateInfoEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT;
+}
+
+template<> VkStructureType getStructureType<VkDescriptorSetVariableDescriptorCountLayoutSupportEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_LAYOUT_SUPPORT_EXT;
+}
+
+template<> VkStructureType getStructureType<VkPhysicalDeviceInlineUniformBlockFeaturesEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INLINE_UNIFORM_BLOCK_FEATURES_EXT;
+}
+
+template<> VkStructureType getStructureType<VkPhysicalDeviceInlineUniformBlockPropertiesEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INLINE_UNIFORM_BLOCK_PROPERTIES_EXT;
+}
+
+template<> VkStructureType getStructureType<VkWriteDescriptorSetInlineUniformBlockEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_INLINE_UNIFORM_BLOCK_EXT;
+}
+
+template<> VkStructureType getStructureType<VkDescriptorPoolInlineUniformBlockCreateInfoEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_INLINE_UNIFORM_BLOCK_CREATE_INFO_EXT;
+}
+
+template<> VkStructureType getStructureType<VkPhysicalDeviceShaderAtomicInt64FeaturesKHR> (void)
+{
+	return VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES_KHR;
+}
+
+template<> VkStructureType getStructureType<VkPhysicalDeviceVulkanMemoryModelFeaturesKHR> (void)
+{
+	return VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES_KHR;
 }
 

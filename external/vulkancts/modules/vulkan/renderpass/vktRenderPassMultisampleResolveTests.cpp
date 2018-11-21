@@ -37,6 +37,8 @@
 #include "vkRef.hpp"
 #include "vkRefUtil.hpp"
 #include "vkTypeUtil.hpp"
+#include "vkCmdUtil.hpp"
+#include "vkObjUtil.hpp"
 
 #include "tcuFloat.hpp"
 #include "tcuImageCompare.hpp"
@@ -208,7 +210,8 @@ Move<VkImage> createImage (const InstanceInterface&	vki,
 						   VkSampleCountFlagBits	sampleCountBit,
 						   VkImageUsageFlags		usage,
 						   deUint32					width,
-						   deUint32					height)
+						   deUint32					height,
+						   deUint32					layerCount)
 {
 	try
 	{
@@ -234,12 +237,13 @@ Move<VkImage> createImage (const InstanceInterface&	vki,
 
 		if (imageFormatProperties.maxExtent.width < imageExtent.width
 			|| imageFormatProperties.maxExtent.height < imageExtent.height
-			|| ((imageFormatProperties.sampleCounts & sampleCountBit) == 0))
+			|| ((imageFormatProperties.sampleCounts & sampleCountBit) == 0)
+			|| imageFormatProperties.maxArrayLayers < layerCount)
 		{
 			TCU_THROW(NotSupportedError, "Image type not supported");
 		}
 
-		return createImage(vkd, device, 0u, imageType, vkFormat, imageExtent, 1u, 1u, sampleCountBit, imageTiling, usage, VK_SHARING_MODE_EXCLUSIVE, 0u, DE_NULL, VK_IMAGE_LAYOUT_UNDEFINED);
+		return createImage(vkd, device, 0u, imageType, vkFormat, imageExtent, 1u, layerCount, sampleCountBit, imageTiling, usage, VK_SHARING_MODE_EXCLUSIVE, 0u, DE_NULL, VK_IMAGE_LAYOUT_UNDEFINED);
 	}
 	catch (const vk::Error& error)
 	{
@@ -254,7 +258,8 @@ Move<VkImageView> createImageView (const DeviceInterface&	vkd,
 								   VkDevice					device,
 								   VkImage					image,
 								   VkFormat					format,
-								   VkImageAspectFlags		aspect)
+								   VkImageAspectFlags		aspect,
+								   deUint32					layerCount)
 {
 	const VkImageSubresourceRange	range =
 	{
@@ -262,10 +267,10 @@ Move<VkImageView> createImageView (const DeviceInterface&	vkd,
 		0u,
 		1u,
 		0u,
-		1u
+		layerCount
 	};
 
-	return createImageView(vkd, device, 0u, image, VK_IMAGE_VIEW_TYPE_2D, format, makeComponentMappingRGBA(), range);
+	return createImageView(vkd, device, 0u, image, VK_IMAGE_VIEW_TYPE_2D_ARRAY, format, makeComponentMappingRGBA(), range);
 }
 
 VkDeviceSize getPixelSize (VkFormat vkFormat)
@@ -279,7 +284,8 @@ Move<VkBuffer> createBuffer (const DeviceInterface&		vkd,
 							 VkDevice					device,
 							 VkFormat					format,
 							 deUint32					width,
-							 deUint32					height)
+							 deUint32					height,
+							 deUint32					layerCount)
 {
 	const VkBufferUsageFlags	bufferUsage			(VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 	const VkDeviceSize			pixelSize			(getPixelSize(format));
@@ -289,7 +295,7 @@ Move<VkBuffer> createBuffer (const DeviceInterface&		vkd,
 		DE_NULL,
 		0u,
 
-		width * height * pixelSize,
+		width * height * layerCount * pixelSize,
 		bufferUsage,
 
 		VK_SHARING_MODE_EXCLUSIVE,
@@ -324,12 +330,13 @@ std::vector<VkImageSp> createMultisampleImages (const InstanceInterface&	vki,
 												VkFormat					format,
 												deUint32					sampleCount,
 												deUint32					width,
-												deUint32					height)
+												deUint32					height,
+												deUint32					layerCount)
 {
 	std::vector<VkImageSp> images (MAX_COLOR_ATTACHMENT_COUNT);
 
 	for (size_t imageNdx = 0; imageNdx < images.size(); imageNdx++)
-		images[imageNdx] = safeSharedPtr(new Unique<VkImage>(createImage(vki, physicalDevice, vkd, device, format, sampleCountBitFromSampleCount(sampleCount), VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, width, height)));
+		images[imageNdx] = safeSharedPtr(new Unique<VkImage>(createImage(vki, physicalDevice, vkd, device, format, sampleCountBitFromSampleCount(sampleCount), VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, width, height, layerCount)));
 
 	return images;
 }
@@ -340,12 +347,13 @@ std::vector<VkImageSp> createSingleSampleImages (const InstanceInterface&	vki,
 												 VkDevice					device,
 												 VkFormat					format,
 												 deUint32					width,
-												 deUint32					height)
+												 deUint32					height,
+												 deUint32					layerCount)
 {
 	std::vector<VkImageSp> images (MAX_COLOR_ATTACHMENT_COUNT);
 
 	for (size_t imageNdx = 0; imageNdx < images.size(); imageNdx++)
-		images[imageNdx] = safeSharedPtr(new Unique<VkImage>(createImage(vki, physicalDevice, vkd, device, format, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, width, height)));
+		images[imageNdx] = safeSharedPtr(new Unique<VkImage>(createImage(vki, physicalDevice, vkd, device, format, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, width, height, layerCount)));
 
 	return images;
 }
@@ -367,12 +375,13 @@ std::vector<VkImageViewSp> createImageViews (const DeviceInterface&			vkd,
 											 VkDevice						device,
 											 const std::vector<VkImageSp>&	images,
 											 VkFormat						format,
-											 VkImageAspectFlagBits			aspect)
+											 VkImageAspectFlagBits			aspect,
+											 deUint32						layerCount)
 {
 	std::vector<VkImageViewSp> views (images.size());
 
 	for (size_t imageNdx = 0; imageNdx < images.size(); imageNdx++)
-		views[imageNdx] = safeSharedPtr(new Unique<VkImageView>(createImageView(vkd, device, **images[imageNdx], format, aspect)));
+		views[imageNdx] = safeSharedPtr(new Unique<VkImageView>(createImageView(vkd, device, **images[imageNdx], format, aspect, layerCount)));
 
 	return views;
 }
@@ -381,12 +390,13 @@ std::vector<VkBufferSp> createBuffers (const DeviceInterface&	vkd,
 									   VkDevice					device,
 									   VkFormat					format,
 									   deUint32					width,
-									   deUint32					height)
+									   deUint32					height,
+									   deUint32					layerCount)
 {
 	std::vector<VkBufferSp> buffers (MAX_COLOR_ATTACHMENT_COUNT);
 
 	for (size_t bufferNdx = 0; bufferNdx < buffers.size(); bufferNdx++)
-		buffers[bufferNdx] = safeSharedPtr(new Unique<VkBuffer>(createBuffer(vkd, device, format, width, height)));
+		buffers[bufferNdx] = safeSharedPtr(new Unique<VkBuffer>(createBuffer(vkd, device, format, width, height, layerCount)));
 
 	return buffers;
 }
@@ -533,7 +543,8 @@ Move<VkFramebuffer> createFramebuffer (const DeviceInterface&			vkd,
 									   const std::vector<VkImageViewSp>&	multisampleImageViews,
 									   const std::vector<VkImageViewSp>&	singlesampleImageViews,
 									   deUint32							width,
-									   deUint32							height)
+									   deUint32							height,
+									   deUint32							layerCount)
 {
 	std::vector<VkImageView> attachments;
 
@@ -559,7 +570,7 @@ Move<VkFramebuffer> createFramebuffer (const DeviceInterface&			vkd,
 
 		width,
 		height,
-		1u
+		layerCount
 	};
 
 	return createFramebuffer(vkd, device, &createInfo);
@@ -597,18 +608,12 @@ Move<VkPipeline> createRenderPipeline (const DeviceInterface&		vkd,
 									   const vk::BinaryCollection&	binaryCollection,
 									   deUint32						width,
 									   deUint32						height,
-									   deUint32						sampleCount)
+									   deUint32						sampleCount,
+									   deUint32						layerCount)
 {
 	const Unique<VkShaderModule>	vertexShaderModule			(createShaderModule(vkd, device, binaryCollection.get("quad-vert"), 0u));
 	const Unique<VkShaderModule>	fragmentShaderModule		(createShaderModule(vkd, device, binaryCollection.get("quad-frag"), 0u));
-	const VkSpecializationInfo		emptyShaderSpecializations	=
-	{
-		0u,
-		DE_NULL,
-
-		0u,
-		DE_NULL
-	};
+	const Move<VkShaderModule>		geometryShaderModule		(layerCount == 1 ? Move<VkShaderModule>() : createShaderModule(vkd, device, binaryCollection.get("geom"), 0u));
 	// Disable blending
 	const VkPipelineColorBlendAttachmentState attachmentBlendState =
 	{
@@ -628,27 +633,6 @@ Move<VkPipeline> createRenderPipeline (const DeviceInterface&		vkd,
 		attachmentBlendState,
 		attachmentBlendState,
 	};
-	const VkPipelineShaderStageCreateInfo shaderStages[2] =
-	{
-		{
-			VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			DE_NULL,
-			(VkPipelineShaderStageCreateFlags)0u,
-			VK_SHADER_STAGE_VERTEX_BIT,
-			*vertexShaderModule,
-			"main",
-			&emptyShaderSpecializations
-		},
-		{
-			VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			DE_NULL,
-			(VkPipelineShaderStageCreateFlags)0u,
-			VK_SHADER_STAGE_FRAGMENT_BIT,
-			*fragmentShaderModule,
-			"main",
-			&emptyShaderSpecializations
-		}
-	};
 	const VkPipelineVertexInputStateCreateInfo vertexInputState =
 	{
 		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -661,55 +645,10 @@ Move<VkPipeline> createRenderPipeline (const DeviceInterface&		vkd,
 		0u,
 		DE_NULL
 	};
-	const VkPipelineInputAssemblyStateCreateInfo inputAssemblyState =
-	{
-		VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		DE_NULL,
+	const tcu::UVec2				renderArea	(width, height);
+	const std::vector<VkViewport>	viewports	(1, makeViewport(renderArea));
+	const std::vector<VkRect2D>		scissors	(1, makeRect2D(renderArea));
 
-		(VkPipelineInputAssemblyStateCreateFlags)0u,
-		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-		VK_FALSE
-	};
-	const VkViewport viewport =
-	{
-		0.0f,  0.0f,
-		(float)width, (float)height,
-
-		0.0f, 1.0f
-	};
-	const VkRect2D scissor =
-	{
-		{ 0u, 0u },
-		{ width, height }
-	};
-	const VkPipelineViewportStateCreateInfo viewportState =
-	{
-		VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-		DE_NULL,
-		(VkPipelineViewportStateCreateFlags)0u,
-
-		1u,
-		&viewport,
-
-		1u,
-		&scissor
-	};
-	const VkPipelineRasterizationStateCreateInfo rasterState =
-	{
-		VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		DE_NULL,
-		(VkPipelineRasterizationStateCreateFlags)0u,
-		VK_FALSE,
-		VK_FALSE,
-		VK_POLYGON_MODE_FILL,
-		VK_CULL_MODE_NONE,
-		VK_FRONT_FACE_COUNTER_CLOCKWISE,
-		VK_FALSE,
-		0.0f,
-		0.0f,
-		0.0f,
-		1.0f
-	};
 	const VkPipelineMultisampleStateCreateInfo multisampleState =
 	{
 		VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
@@ -768,33 +707,26 @@ Move<VkPipeline> createRenderPipeline (const DeviceInterface&		vkd,
 		attachmentBlendStates,
 		{ 0.0f, 0.0f, 0.0f, 0.0f }
 	};
-	const VkGraphicsPipelineCreateInfo createInfo =
-	{
-		VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		DE_NULL,
-		(VkPipelineCreateFlags)0u,
 
-		2,
-		shaderStages,
-
-		&vertexInputState,
-		&inputAssemblyState,
-		DE_NULL,
-		&viewportState,
-		&rasterState,
-		&multisampleState,
-		&depthStencilState,
-		&blendState,
-		(const VkPipelineDynamicStateCreateInfo*)DE_NULL,
-		pipelineLayout,
-
-		renderPass,
-		0u,
-		DE_NULL,
-		0u
-	};
-
-	return createGraphicsPipeline(vkd, device, DE_NULL, &createInfo);
+	return makeGraphicsPipeline(vkd,												// const DeviceInterface&                        vk
+								device,												// const VkDevice                                device
+								pipelineLayout,										// const VkPipelineLayout                        pipelineLayout
+								*vertexShaderModule,								// const VkShaderModule                          vertexShaderModule
+								DE_NULL,											// const VkShaderModule                          tessellationControlShaderModule
+								DE_NULL,											// const VkShaderModule                          tessellationEvalShaderModule
+								layerCount != 1 ? *geometryShaderModule : DE_NULL,	// const VkShaderModule                          geometryShaderModule
+								*fragmentShaderModule,								// const VkShaderModule                          fragmentShaderModule
+								renderPass,											// const VkRenderPass                            renderPass
+								viewports,											// const std::vector<VkViewport>&                viewports
+								scissors,											// const std::vector<VkRect2D>&                  scissors
+								VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,				// const VkPrimitiveTopology                     topology
+								0u,													// const deUint32                                subpass
+								0u,													// const deUint32                                patchControlPoints
+								&vertexInputState,									// const VkPipelineVertexInputStateCreateInfo*   vertexInputStateCreateInfo
+								DE_NULL,											// const VkPipelineRasterizationStateCreateInfo* rasterizationStateCreateInfo
+								&multisampleState,									// const VkPipelineMultisampleStateCreateInfo*   multisampleStateCreateInfo
+								&depthStencilState,									// const VkPipelineDepthStencilStateCreateInfo*  depthStencilStateCreateInfo
+								&blendState);										// const VkPipelineColorBlendStateCreateInfo*    colorBlendStateCreateInfo
 }
 
 struct TestConfig
@@ -829,12 +761,16 @@ private:
 	void											submit								(void);
 	void											submitSwitch						(RenderPassType						renderPassType);
 	void											verify								(void);
+	void											logImage							(const std::string&					name,
+																						 const tcu::ConstPixelBufferAccess&	image);
 
+	const bool										m_featuresSupported;
 	const bool										m_extensionSupported;
 	const RenderPassType							m_renderPassType;
 
 	const VkFormat									m_format;
 	const deUint32									m_sampleCount;
+	const deUint32									m_layerCount;
 	const deUint32									m_width;
 	const deUint32									m_height;
 
@@ -863,32 +799,34 @@ private:
 
 MultisampleRenderPassTestInstance::MultisampleRenderPassTestInstance (Context& context, TestConfig config)
 	: TestInstance				(context)
+	, m_featuresSupported		((config.layerCount > 1) && context.requireDeviceCoreFeature(DEVICE_CORE_FEATURE_GEOMETRY_SHADER))
 	, m_extensionSupported		((config.renderPassType == RENDERPASS_TYPE_RENDERPASS2) && context.requireDeviceExtension("VK_KHR_create_renderpass2"))
 	, m_renderPassType			(config.renderPassType)
 	, m_format					(config.format)
 	, m_sampleCount				(config.sampleCount)
+	, m_layerCount				(config.layerCount)
 	, m_width					(32u)
 	, m_height					(32u)
 
-	, m_multisampleImages		(createMultisampleImages(context.getInstanceInterface(), context.getPhysicalDevice(), context.getDeviceInterface(), context.getDevice(), m_format, m_sampleCount, m_width, m_height))
+	, m_multisampleImages		(createMultisampleImages(context.getInstanceInterface(), context.getPhysicalDevice(), context.getDeviceInterface(), context.getDevice(), m_format, m_sampleCount, m_width, m_height, m_layerCount))
 	, m_multisampleImageMemory	(createImageMemory(context.getDeviceInterface(), context.getDevice(), context.getDefaultAllocator(), m_multisampleImages))
-	, m_multisampleImageViews	(createImageViews(context.getDeviceInterface(), context.getDevice(), m_multisampleImages, m_format, VK_IMAGE_ASPECT_COLOR_BIT))
+	, m_multisampleImageViews	(createImageViews(context.getDeviceInterface(), context.getDevice(), m_multisampleImages, m_format, VK_IMAGE_ASPECT_COLOR_BIT, m_layerCount))
 
-	, m_singlesampleImages		(createSingleSampleImages(context.getInstanceInterface(), context.getPhysicalDevice(), context.getDeviceInterface(), context.getDevice(), m_format, m_width, m_height))
+	, m_singlesampleImages		(createSingleSampleImages(context.getInstanceInterface(), context.getPhysicalDevice(), context.getDeviceInterface(), context.getDevice(), m_format, m_width, m_height, m_layerCount))
 	, m_singlesampleImageMemory	(createImageMemory(context.getDeviceInterface(), context.getDevice(), context.getDefaultAllocator(), m_singlesampleImages))
-	, m_singlesampleImageViews	(createImageViews(context.getDeviceInterface(), context.getDevice(), m_singlesampleImages, m_format, VK_IMAGE_ASPECT_COLOR_BIT))
+	, m_singlesampleImageViews	(createImageViews(context.getDeviceInterface(), context.getDevice(), m_singlesampleImages, m_format, VK_IMAGE_ASPECT_COLOR_BIT, m_layerCount))
 
 	, m_renderPass				(createRenderPass(context.getDeviceInterface(), context.getDevice(), m_format, m_sampleCount, config.renderPassType))
-	, m_framebuffer				(createFramebuffer(context.getDeviceInterface(), context.getDevice(), *m_renderPass, m_multisampleImageViews, m_singlesampleImageViews, m_width, m_height))
+	, m_framebuffer				(createFramebuffer(context.getDeviceInterface(), context.getDevice(), *m_renderPass, m_multisampleImageViews, m_singlesampleImageViews, m_width, m_height, m_layerCount))
 
 	, m_renderPipelineLayout	(createRenderPipelineLayout(context.getDeviceInterface(), context.getDevice()))
-	, m_renderPipeline			(createRenderPipeline(context.getDeviceInterface(), context.getDevice(), *m_renderPass, *m_renderPipelineLayout, context.getBinaryCollection(), m_width, m_height, m_sampleCount))
+	, m_renderPipeline			(createRenderPipeline(context.getDeviceInterface(), context.getDevice(), *m_renderPass, *m_renderPipelineLayout, context.getBinaryCollection(), m_width, m_height, m_sampleCount, m_layerCount))
 
-	, m_buffers					(createBuffers(context.getDeviceInterface(), context.getDevice(), m_format, m_width, m_height))
+	, m_buffers					(createBuffers(context.getDeviceInterface(), context.getDevice(), m_format, m_width, m_height, m_layerCount))
 	, m_bufferMemory			(createBufferMemory(context.getDeviceInterface(), context.getDevice(), context.getDefaultAllocator(), m_buffers))
 
 	, m_commandPool				(createCommandPool(context.getDeviceInterface(), context.getDevice(), VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, context.getUniversalQueueFamilyIndex()))
-	, m_sum						(tcu::TextureFormat(tcu::TextureFormat::RGBA, tcu::TextureFormat::FLOAT), m_width, m_height)
+	, m_sum						(tcu::TextureFormat(tcu::TextureFormat::RGBA, tcu::TextureFormat::FLOAT), m_width, m_height, m_layerCount)
 	, m_sampleMask				(0x0u)
 {
 	tcu::clear(m_sum.getAccess(), Vec4(0.0f, 0.0f, 0.0f, 0.0f));
@@ -896,6 +834,19 @@ MultisampleRenderPassTestInstance::MultisampleRenderPassTestInstance (Context& c
 
 MultisampleRenderPassTestInstance::~MultisampleRenderPassTestInstance (void)
 {
+}
+
+void MultisampleRenderPassTestInstance::logImage (const std::string& name, const tcu::ConstPixelBufferAccess& image)
+{
+	m_context.getTestContext().getLog() << tcu::LogImage(name.c_str(), name.c_str(), image);
+
+	for (deUint32 layerNdx = 0; layerNdx < m_layerCount; ++layerNdx)
+	{
+		const std::string			layerName	(name + " Layer:" + de::toString(layerNdx));
+		tcu::ConstPixelBufferAccess	layerImage	(image.getFormat(), m_width, m_height, 1, image.getPixelPtr(0, 0, layerNdx));
+
+		m_context.getTestContext().getLog() << tcu::LogImage(layerName.c_str(), layerName.c_str(), layerImage);
+	}
 }
 
 template<typename RenderpassSubpass>
@@ -907,18 +858,7 @@ void MultisampleRenderPassTestInstance::submit (void)
 	const typename RenderpassSubpass::SubpassBeginInfo	subpassBeginInfo	(DE_NULL, VK_SUBPASS_CONTENTS_INLINE);
 	const typename RenderpassSubpass::SubpassEndInfo	subpassEndInfo		(DE_NULL);
 
-	{
-		const VkCommandBufferBeginInfo beginInfo =
-		{
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			DE_NULL,
-
-			VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-			DE_NULL
-		};
-
-		VK_CHECK(vkd.beginCommandBuffer(*commandBuffer, &beginInfo));
-	}
+	beginCommandBuffer(vkd, *commandBuffer);
 
 	// Memory barriers between previous copies and rendering
 	{
@@ -946,7 +886,7 @@ void MultisampleRenderPassTestInstance::submit (void)
 					0u,
 					1u,
 					0u,
-					1u
+					m_layerCount
 				}
 			};
 
@@ -1037,7 +977,7 @@ void MultisampleRenderPassTestInstance::submit (void)
 				{ m_width, m_height }
 			},
 			0u,
-			1u,
+			m_layerCount,
 		};
 		vkd.cmdClearAttachments(*commandBuffer, DE_LENGTH_OF_ARRAY(colors), colors, 1u, &rect);
 	}
@@ -1077,7 +1017,7 @@ void MultisampleRenderPassTestInstance::submit (void)
 					0u,
 					1u,
 					0u,
-					1u
+					m_layerCount
 				}
 			};
 
@@ -1099,7 +1039,7 @@ void MultisampleRenderPassTestInstance::submit (void)
 				VK_IMAGE_ASPECT_COLOR_BIT,
 				0u,
 				0u,
-				1u,
+				m_layerCount,
 			},
 			{ 0u, 0u, 0u },
 			{ m_width, m_height, 1u }
@@ -1136,29 +1076,9 @@ void MultisampleRenderPassTestInstance::submit (void)
 		vkd.cmdPipelineBarrier(*commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0u, 0u, DE_NULL, (deUint32)barriers.size(), &barriers[0], 0u, DE_NULL);
 	}
 
-	VK_CHECK(vkd.endCommandBuffer(*commandBuffer));
+	endCommandBuffer(vkd, *commandBuffer);
 
-	{
-		const VkSubmitInfo submitInfo =
-		{
-			VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			DE_NULL,
-
-			0u,
-			DE_NULL,
-			DE_NULL,
-
-			1u,
-			&*commandBuffer,
-
-			0u,
-			DE_NULL
-		};
-
-		VK_CHECK(vkd.queueSubmit(m_context.getUniversalQueue(), 1u, &submitInfo, (VkFence)0u));
-
-		VK_CHECK(vkd.queueWaitIdle(m_context.getUniversalQueue()));
-	}
+	submitCommandsAndWait(vkd, device, m_context.getUniversalQueue(), *commandBuffer);
 }
 
 void MultisampleRenderPassTestInstance::submitSwitch (RenderPassType renderPassType)
@@ -1179,7 +1099,7 @@ void MultisampleRenderPassTestInstance::submitSwitch (RenderPassType renderPassT
 void MultisampleRenderPassTestInstance::verify (void)
 {
 	const Vec4							errorColor		(1.0f, 0.0f, 0.0f, 1.0f);
-	const Vec4							okColor			(0.0f, 0.0f, 0.0f, 1.0f);
+	const Vec4							okColor			(0.0f, 1.0f, 0.0f, 1.0f);
 	const tcu::TextureFormat			format			(mapVkFormat(m_format));
 	const tcu::TextureChannelClass		channelClass	(tcu::getTextureChannelClass(format.type));
 	const void* const					ptrs[]			=
@@ -1191,12 +1111,12 @@ void MultisampleRenderPassTestInstance::verify (void)
 	};
 	const tcu::ConstPixelBufferAccess	accesses[]		=
 	{
-		tcu::ConstPixelBufferAccess(format, m_width, m_height, 1, ptrs[0]),
-		tcu::ConstPixelBufferAccess(format, m_width, m_height, 1, ptrs[1]),
-		tcu::ConstPixelBufferAccess(format, m_width, m_height, 1, ptrs[2]),
-		tcu::ConstPixelBufferAccess(format, m_width, m_height, 1, ptrs[3])
+		tcu::ConstPixelBufferAccess(format, m_width, m_height, m_layerCount, ptrs[0]),
+		tcu::ConstPixelBufferAccess(format, m_width, m_height, m_layerCount, ptrs[1]),
+		tcu::ConstPixelBufferAccess(format, m_width, m_height, m_layerCount, ptrs[2]),
+		tcu::ConstPixelBufferAccess(format, m_width, m_height, m_layerCount, ptrs[3])
 	};
-	tcu::TextureLevel					errorMask		(tcu::TextureFormat(tcu::TextureFormat::RGB, tcu::TextureFormat::UNORM_INT8), m_width, m_height);
+	tcu::TextureLevel					errorMask		(tcu::TextureFormat(tcu::TextureFormat::RGB, tcu::TextureFormat::UNORM_INT8), m_width, m_height, m_layerCount);
 	tcu::TestLog&						log				(m_context.getTestContext().getLog());
 
 	switch (channelClass)
@@ -1229,11 +1149,12 @@ void MultisampleRenderPassTestInstance::verify (void)
 					DE_FATAL("Unknown channel class");
 			}
 
+			for (deUint32 z = 0; z < m_layerCount; z++)
 			for (deUint32 y = 0; y < m_height; y++)
 			for (deUint32 x = 0; x < m_width; x++)
 			{
 				// Color has to be black if no samples were covered, white if all samples were covered or same in every attachment
-				const Vec4	firstColor	(accesses[0].getPixel(x, y));
+				const Vec4	firstColor	(accesses[0].getPixel(x, y, z));
 				const Vec4	refColor	(m_sampleMask == 0x0u
 										? Vec4(clearValue,
 												componentCount > 1 ? clearValue : 0.0f,
@@ -1246,24 +1167,24 @@ void MultisampleRenderPassTestInstance::verify (void)
 												componentCount > 3 ? renderValue : 1.0f)
 										: firstColor);
 
-				errorMask.getAccess().setPixel(okColor, x, y);
+				errorMask.getAccess().setPixel(okColor, x, y, z);
 
 				for (size_t attachmentNdx = 0; attachmentNdx < MAX_COLOR_ATTACHMENT_COUNT; attachmentNdx++)
 				{
-					const Vec4 color (accesses[attachmentNdx].getPixel(x, y));
+					const Vec4 color (accesses[attachmentNdx].getPixel(x, y, z));
 
 					if (refColor != color)
 					{
 						isOk = false;
-						errorMask.getAccess().setPixel(errorColor, x, y);
+						errorMask.getAccess().setPixel(errorColor, x, y, z);
 						break;
 					}
 				}
 
 				{
-					const Vec4 old = m_sum.getAccess().getPixel(x, y);
+					const Vec4 old = m_sum.getAccess().getPixel(x, y, z);
 
-					m_sum.getAccess().setPixel(old + firstColor, x, y);
+					m_sum.getAccess().setPixel(old + firstColor, x, y, z);
 				}
 			}
 
@@ -1273,12 +1194,9 @@ void MultisampleRenderPassTestInstance::verify (void)
 				const tcu::ScopedLogSection	section		(log, sectionName, sectionName);
 
 				for (size_t attachmentNdx = 0; attachmentNdx < MAX_COLOR_ATTACHMENT_COUNT; attachmentNdx++)
-				{
-					const std::string	name	("Attachment" + de::toString(attachmentNdx));
-					m_context.getTestContext().getLog() << tcu::LogImage(name.c_str(), name.c_str(), accesses[attachmentNdx]);
-				}
+					logImage(std::string("Attachment") + de::toString(attachmentNdx), accesses[attachmentNdx]);
 
-				m_context.getTestContext().getLog() << tcu::LogImage("ErrorMask", "ErrorMask", errorMask.getAccess());
+				logImage("ErrorMask", errorMask.getAccess());
 
 				if (m_sampleMask == 0x0u)
 				{
@@ -1313,6 +1231,7 @@ void MultisampleRenderPassTestInstance::verify (void)
 			bool			inconsistentComponents	= false;
 			bool			inconsistentAttachments	= false;
 
+			for (deUint32 z = 0; z < m_layerCount; z++)
 			for (deUint32 y = 0; y < m_height; y++)
 			for (deUint32 x = 0; x < m_width; x++)
 			{
@@ -1321,35 +1240,38 @@ void MultisampleRenderPassTestInstance::verify (void)
 										? clearValue
 										: m_sampleMask == ((0x1u << m_sampleCount) - 1u)
 										? renderValue
-										: accesses[0].getPixelUint(x, y));
-
-				errorMask.getAccess().setPixel(okColor, x, y);
+										: accesses[0].getPixelUint(x, y, z));
+				bool		isOk		= true;
 
 				// If reference value was taken from first attachment, check that it is valid value i.e. clear or render value
 				if (m_sampleMask != 0x0u && m_sampleMask != ((0x1u << m_sampleCount) - 1u))
 				{
 					// Each component must be resolved same way
-					const BVec4		isRenderValue	(refColor == renderValue);
-					const BVec4		isClearValue	(refColor == clearValue);
+					const BVec4		isRenderValue			(refColor == renderValue);
+					const BVec4		isClearValue			(refColor == clearValue);
+					const bool		unexpectedValue			(tcu::anyNotEqual(tcu::logicalOr(isRenderValue, isClearValue), BVec4(true)));
+					const bool		inconsistentComponent	(!(tcu::allEqual(isRenderValue, BVec4(true)) || tcu::allEqual(isClearValue, BVec4(true))));
 
-					unexpectedValues		= tcu::anyNotEqual(tcu::logicalOr(isRenderValue, isClearValue), BVec4(true));
-					inconsistentComponents	= !(tcu::allEqual(isRenderValue, BVec4(true)) || tcu::allEqual(isClearValue, BVec4(true)));
+					unexpectedValues		|= unexpectedValue;
+					inconsistentComponents	|= inconsistentComponent;
 
-					if (unexpectedValues || inconsistentComponents)
-						errorMask.getAccess().setPixel(errorColor, x, y);
+					if (unexpectedValue || inconsistentComponent)
+						isOk = false;
 				}
 
 				for (size_t attachmentNdx = 0; attachmentNdx < MAX_COLOR_ATTACHMENT_COUNT; attachmentNdx++)
 				{
-					const UVec4 color (accesses[attachmentNdx].getPixelUint(x, y));
+					const UVec4 color (accesses[attachmentNdx].getPixelUint(x, y, z));
 
 					if (refColor != color)
 					{
+						isOk = false;
 						inconsistentAttachments = true;
-						errorMask.getAccess().setPixel(errorColor, x, y);
 						break;
 					}
 				}
+
+				errorMask.getAccess().setPixel((isOk ? okColor : errorColor), x, y, z);
 			}
 
 			if (unexpectedValues || inconsistentComponents || inconsistentAttachments)
@@ -1358,12 +1280,9 @@ void MultisampleRenderPassTestInstance::verify (void)
 				const tcu::ScopedLogSection	section		(log, sectionName, sectionName);
 
 				for (size_t attachmentNdx = 0; attachmentNdx < MAX_COLOR_ATTACHMENT_COUNT; attachmentNdx++)
-				{
-					const std::string	name	("Attachment" + de::toString(attachmentNdx));
-					m_context.getTestContext().getLog() << tcu::LogImage(name.c_str(), name.c_str(), accesses[attachmentNdx]);
-				}
+					logImage(std::string("Attachment") + de::toString(attachmentNdx), accesses[attachmentNdx]);
 
-				m_context.getTestContext().getLog() << tcu::LogImage("ErrorMask", "ErrorMask", errorMask.getAccess());
+				logImage("ErrorMask", errorMask.getAccess());
 
 				if (m_sampleMask == 0x0u)
 				{
@@ -1413,6 +1332,7 @@ void MultisampleRenderPassTestInstance::verify (void)
 			bool			inconsistentComponents	= false;
 			bool			inconsistentAttachments	= false;
 
+			for (deUint32 z = 0; z < m_layerCount; z++)
 			for (deUint32 y = 0; y < m_height; y++)
 			for (deUint32 x = 0; x < m_width; x++)
 			{
@@ -1421,23 +1341,38 @@ void MultisampleRenderPassTestInstance::verify (void)
 										? clearValue
 										: m_sampleMask == ((0x1u << m_sampleCount) - 1u)
 										? renderValue
-										: accesses[0].getPixelInt(x, y));
-
-				errorMask.getAccess().setPixel(okColor, x, y);
+										: accesses[0].getPixelInt(x, y, z));
+				bool		isOk		= true;
 
 				// If reference value was taken from first attachment, check that it is valid value i.e. clear or render value
 				if (m_sampleMask != 0x0u && m_sampleMask != ((0x1u << m_sampleCount) - 1u))
 				{
 					// Each component must be resolved same way
-					const BVec4		isRenderValue	(refColor == renderValue);
-					const BVec4		isClearValue	(refColor == clearValue);
+					const BVec4		isRenderValue			(refColor == renderValue);
+					const BVec4		isClearValue			(refColor == clearValue);
+					const bool		unexpectedValue			(tcu::anyNotEqual(tcu::logicalOr(isRenderValue, isClearValue), BVec4(true)));
+					const bool		inconsistentComponent	(!(tcu::allEqual(isRenderValue, BVec4(true)) || tcu::allEqual(isClearValue, BVec4(true))));
 
-					unexpectedValues		= tcu::anyNotEqual(tcu::logicalOr(isRenderValue, isClearValue), BVec4(true));
-					inconsistentComponents	= !(tcu::allEqual(isRenderValue, BVec4(true)) || tcu::allEqual(isClearValue, BVec4(true)));
+					unexpectedValues		|= unexpectedValue;
+					inconsistentComponents	|= inconsistentComponent;
 
-					if (unexpectedValues || inconsistentComponents)
-						errorMask.getAccess().setPixel(errorColor, x, y);
+					if (unexpectedValue || inconsistentComponent)
+						isOk = false;
 				}
+
+				for (size_t attachmentNdx = 0; attachmentNdx < MAX_COLOR_ATTACHMENT_COUNT; attachmentNdx++)
+				{
+					const IVec4 color (accesses[attachmentNdx].getPixelInt(x, y, z));
+
+					if (refColor != color)
+					{
+						isOk = false;
+						inconsistentAttachments = true;
+						break;
+					}
+				}
+
+				errorMask.getAccess().setPixel((isOk ? okColor : errorColor), x, y, z);
 			}
 
 			if (unexpectedValues || inconsistentComponents || inconsistentAttachments)
@@ -1446,12 +1381,9 @@ void MultisampleRenderPassTestInstance::verify (void)
 				const tcu::ScopedLogSection	section		(log, sectionName, sectionName);
 
 				for (size_t attachmentNdx = 0; attachmentNdx < MAX_COLOR_ATTACHMENT_COUNT; attachmentNdx++)
-				{
-					const std::string	name	("Attachment" + de::toString(attachmentNdx));
-					m_context.getTestContext().getLog() << tcu::LogImage(name.c_str(), name.c_str(), accesses[attachmentNdx]);
-				}
+					logImage(std::string("Attachment") + de::toString(attachmentNdx), accesses[attachmentNdx]);
 
-				m_context.getTestContext().getLog() << tcu::LogImage("ErrorMask", "ErrorMask", errorMask.getAccess());
+				logImage("ErrorMask", errorMask.getAccess());
 
 				if (m_sampleMask == 0x0u)
 				{
@@ -1537,8 +1469,8 @@ tcu::TestStatus MultisampleRenderPassTestInstance::iterate (void)
 			const float			threshold		= 0.05f;
 			const int			componentCount	(tcu::getNumUsedChannels(format.order));
 			const Vec4			errorColor		(1.0f, 0.0f, 0.0f, 1.0f);
-			const Vec4			okColor			(0.0f, 0.0f, 0.0f, 1.0f);
-			tcu::TextureLevel	errorMask		(tcu::TextureFormat(tcu::TextureFormat::RGB, tcu::TextureFormat::UNORM_INT8), m_width, m_height);
+			const Vec4			okColor			(0.0f, 1.0f, 0.0f, 1.0f);
+			tcu::TextureLevel	errorMask		(tcu::TextureFormat(tcu::TextureFormat::RGB, tcu::TextureFormat::UNORM_INT8), m_width, m_height, m_layerCount);
 			bool				isOk			= true;
 			Vec4				maxDiff			(0.0f);
 			Vec4				expectedAverage;
@@ -1562,15 +1494,16 @@ tcu::TestStatus MultisampleRenderPassTestInstance::iterate (void)
 					DE_FATAL("Unknown channel class");
 			}
 
+			for (deUint32 z = 0; z < m_layerCount; z++)
 			for (deUint32 y = 0; y < m_height; y++)
 			for (deUint32 x = 0; x < m_width; x++)
 			{
-				const Vec4	sum		(m_sum.getAccess().getPixel(x, y));
+				const Vec4	sum		(m_sum.getAccess().getPixel(x, y, z));
 				const Vec4	average	(sum / Vec4((float)(0x1u << m_sampleCount)));
 				const Vec4	diff	(tcu::abs(average - expectedAverage));
 
-				m_sum.getAccess().setPixel(average, x, y);
-				errorMask.getAccess().setPixel(okColor, x, y);
+				m_sum.getAccess().setPixel(average, x, y, z);
+				errorMask.getAccess().setPixel(okColor, x, y, z);
 
 				if (diff[0] > threshold
 						|| diff[1] > threshold
@@ -1579,7 +1512,7 @@ tcu::TestStatus MultisampleRenderPassTestInstance::iterate (void)
 				{
 					isOk	= false;
 					maxDiff	= tcu::max(maxDiff, diff);
-					errorMask.getAccess().setPixel(errorColor, x, y);
+					errorMask.getAccess().setPixel(errorColor, x, y, z);
 				}
 			}
 
@@ -1619,6 +1552,38 @@ struct Programs
 			"\tgl_Position = vec4(((gl_VertexIndex + 2) / 3) % 2 == 0 ? -1.0 : 1.0,\n"
 			"\t                   ((gl_VertexIndex + 1) / 3) % 2 == 0 ? -1.0 : 1.0, 0.0, 1.0);\n"
 			"}\n");
+
+		if (config.layerCount > 1)
+		{
+			std::ostringstream src;
+
+			src << "#version 450\n"
+				<< "highp float;\n"
+				<< "\n"
+				<< "layout(triangles) in;\n"
+				<< "layout(triangle_strip, max_vertices = " << 3 * 2 * config.layerCount << ") out;\n"
+				<< "\n"
+				<< "in gl_PerVertex {\n"
+				<< "    vec4 gl_Position;\n"
+				<< "} gl_in[];\n"
+				<< "\n"
+				<< "out gl_PerVertex {\n"
+				<< "    vec4 gl_Position;\n"
+				<< "};\n"
+				<< "\n"
+				<< "void main (void) {\n"
+				<< "    for (int layerNdx = 0; layerNdx < " << config.layerCount << "; ++layerNdx) {\n"
+				<< "        for(int vertexNdx = 0; vertexNdx < gl_in.length(); vertexNdx++) {\n"
+				<< "            gl_Position = gl_in[vertexNdx].gl_Position;\n"
+				<< "            gl_Layer    = layerNdx;\n"
+				<< "            EmitVertex();\n"
+				<< "        };\n"
+				<< "        EndPrimitive();\n"
+				<< "    };\n"
+				<< "}\n";
+
+			dst.glslSources.add("geom") << glu::GeometrySource(src.str());
+		}
 
 		switch (channelClass)
 		{
@@ -1757,24 +1722,45 @@ void initTests (tcu::TestCaseGroup* group, RenderPassType renderPassType)
 	{
 		2u, 4u, 8u
 	};
+	const deUint32			layerCounts[] =
+	{
+		1u, 3u, 6u
+	};
 	tcu::TestContext&		testCtx		(group->getTestContext());
 
-	for (size_t formatNdx = 0; formatNdx < DE_LENGTH_OF_ARRAY(formats); formatNdx++)
+	for (size_t layerCountNdx = 0; layerCountNdx < DE_LENGTH_OF_ARRAY(layerCounts); layerCountNdx++)
 	{
-		const VkFormat					format		(formats[formatNdx]);
-		const std::string				formatName	(formatToName(format));
-		de::MovePtr<tcu::TestCaseGroup>	formatGroup	(new tcu::TestCaseGroup(testCtx, formatName.c_str(), formatName.c_str()));
+		const deUint32					layerCount		(layerCounts[layerCountNdx]);
+		const std::string				layerGroupName	("layers_" + de::toString(layerCount));
+		de::MovePtr<tcu::TestCaseGroup>	layerGroup		(new tcu::TestCaseGroup(testCtx, layerGroupName.c_str(), layerGroupName.c_str()));
 
-		for (size_t sampleCountNdx = 0; sampleCountNdx < DE_LENGTH_OF_ARRAY(sampleCounts); sampleCountNdx++)
+		for (size_t formatNdx = 0; formatNdx < DE_LENGTH_OF_ARRAY(formats); formatNdx++)
 		{
-			const deUint32		sampleCount	(sampleCounts[sampleCountNdx]);
-			const std::string	testName	("samples_" + de::toString(sampleCount));
-			const TestConfig	testConfig	(format, sampleCount, 1, renderPassType);
+			const VkFormat					format		(formats[formatNdx]);
+			const std::string				formatName	(formatToName(format));
+			de::MovePtr<tcu::TestCaseGroup>	formatGroup	(new tcu::TestCaseGroup(testCtx, formatName.c_str(), formatName.c_str()));
 
-			formatGroup->addChild(new InstanceFactory1<MultisampleRenderPassTestInstance, TestConfig, Programs>(testCtx, tcu::NODETYPE_SELF_VALIDATE, testName.c_str(), testName.c_str(), testConfig));
+			for (size_t sampleCountNdx = 0; sampleCountNdx < DE_LENGTH_OF_ARRAY(sampleCounts); sampleCountNdx++)
+			{
+				const deUint32		sampleCount	(sampleCounts[sampleCountNdx]);
+				const std::string	testName	("samples_" + de::toString(sampleCount));
+				const TestConfig	testConfig	(format, sampleCount, layerCount, renderPassType);
+
+				// Skip this test as it is rather slow
+				if (layerCount == 6 && sampleCount == 8)
+					continue;
+
+				formatGroup->addChild(new InstanceFactory1<MultisampleRenderPassTestInstance, TestConfig, Programs>(testCtx, tcu::NODETYPE_SELF_VALIDATE, testName.c_str(), testName.c_str(), testConfig));
+			}
+
+			if (layerCount == 1)
+				group->addChild(formatGroup.release());
+			else
+				layerGroup->addChild(formatGroup.release());
 		}
 
-		group->addChild(formatGroup.release());
+		if (layerCount != 1)
+			group->addChild(layerGroup.release());
 	}
 }
 

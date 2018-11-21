@@ -30,6 +30,7 @@
 #include "vkMemUtil.hpp"
 #include "vkTypeUtil.hpp"
 #include "vkQueryUtil.hpp"
+#include "vkCmdUtil.hpp"
 
 #include "tcuTexture.hpp"
 #include "tcuTestLog.hpp"
@@ -577,13 +578,6 @@ TestImage::TestImage (Context& context, TextureType texType, tcu::TextureFormat 
 	{
 		const Unique<VkCommandPool>		cmdPool			(createCommandPool(vkd, device, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, context.getUniversalQueueFamilyIndex()));
 		const Unique<VkCommandBuffer>	cmdBuf			(allocateCommandBuffer(vkd, device, *cmdPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY));
-		const VkCommandBufferBeginInfo	beginInfo		=
-		{
-			VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			DE_NULL,
-			(VkCommandBufferUsageFlags)VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-			(const VkCommandBufferInheritanceInfo*)DE_NULL,
-		};
 		const VkImageAspectFlags		imageAspect		= (VkImageAspectFlags)(format.order == tcu::TextureFormat::D ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
 		const VkBufferImageCopy			copyInfo		=
 		{
@@ -638,7 +632,7 @@ TestImage::TestImage (Context& context, TextureType texType, tcu::TextureFormat 
 			}
 		};
 
-		VK_CHECK(vkd.beginCommandBuffer(*cmdBuf, &beginInfo));
+		beginCommandBuffer(vkd, *cmdBuf);
 		vkd.cmdPipelineBarrier(*cmdBuf,
 							   (VkPipelineStageFlags)VK_PIPELINE_STAGE_HOST_BIT,
 							   (VkPipelineStageFlags)VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -660,26 +654,9 @@ TestImage::TestImage (Context& context, TextureType texType, tcu::TextureFormat 
 							   (const VkBufferMemoryBarrier*)DE_NULL,
 							   1u,
 							   &postCopyBarrier);
-		VK_CHECK(vkd.endCommandBuffer(*cmdBuf));
+		endCommandBuffer(vkd, *cmdBuf);
 
-		{
-			const Unique<VkFence>	fence		(createFence(vkd, device));
-			const VkSubmitInfo		submitInfo	=
-			{
-				VK_STRUCTURE_TYPE_SUBMIT_INFO,
-				DE_NULL,
-				0u,
-				(const VkSemaphore*)DE_NULL,
-				(const VkPipelineStageFlags*)DE_NULL,
-				1u,
-				&cmdBuf.get(),
-				0u,
-				(const VkSemaphore*)DE_NULL,
-			};
-
-			VK_CHECK(vkd.queueSubmit(context.getUniversalQueue(), 1u, &submitInfo, *fence));
-			VK_CHECK(vkd.waitForFences(device, 1u, &fence.get(), VK_TRUE, ~0ull));
-		}
+		submitCommandsAndWait(vkd, device, context.getUniversalQueue(), cmdBuf.get());
 	}
 }
 

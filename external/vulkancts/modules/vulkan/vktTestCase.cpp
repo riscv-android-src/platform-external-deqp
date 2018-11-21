@@ -222,20 +222,24 @@ static deUint32 findQueueFamilyIndexWithCaps (const InstanceInterface& vkInstanc
 	TCU_THROW(NotSupportedError, "No matching queue found");
 }
 
-Move<VkDevice> createDefaultDevice (const InstanceInterface&			vki,
+Move<VkDevice> createDefaultDevice (const PlatformInterface&			vkp,
+									VkInstance							instance,
+									const InstanceInterface&			vki,
 									VkPhysicalDevice					physicalDevice,
 									const deUint32						apiVersion,
 									deUint32							queueIndex,
+									deUint32							sparseQueueIndex,
 									const VkPhysicalDeviceFeatures2&	enabledFeatures,
 									const vector<string>&				enabledExtensions,
 									const tcu::CommandLine&				cmdLine)
 {
-	VkDeviceQueueCreateInfo		queueInfo;
+	VkDeviceQueueCreateInfo		queueInfo[2];
 	VkDeviceCreateInfo			deviceInfo;
 	vector<string>				enabledLayers;
 	vector<const char*>			layerPtrs;
 	vector<const char*>			extensionPtrs;
 	const float					queuePriority	= 1.0f;
+	const deUint32				numQueues = (enabledFeatures.features.sparseBinding && (queueIndex != sparseQueueIndex)) ? 2 : 1;
 
 	deMemset(&queueInfo,	0, sizeof(queueInfo));
 	deMemset(&deviceInfo,	0, sizeof(deviceInfo));
@@ -263,26 +267,35 @@ Move<VkDevice> createDefaultDevice (const InstanceInterface&			vki,
 	for (size_t ndx = 0; ndx < nonCoreExtensions.size(); ++ndx)
 		extensionPtrs[ndx] = nonCoreExtensions[ndx].c_str();
 
-	// VK_KHR_get_physical_device_propeties2 is used if enabledFeatures.pNext != 0
+	queueInfo[0].sType						= VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	queueInfo[0].pNext						= DE_NULL;
+	queueInfo[0].flags						= (VkDeviceQueueCreateFlags)0u;
+	queueInfo[0].queueFamilyIndex			= queueIndex;
+	queueInfo[0].queueCount					= 1u;
+	queueInfo[0].pQueuePriorities			= &queuePriority;
 
-	queueInfo.sType							= VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queueInfo.pNext							= DE_NULL;
-	queueInfo.flags							= (VkDeviceQueueCreateFlags)0u;
-	queueInfo.queueFamilyIndex				= queueIndex;
-	queueInfo.queueCount					= 1u;
-	queueInfo.pQueuePriorities				= &queuePriority;
+	if (numQueues > 1)
+	{
+		queueInfo[1].sType						= VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queueInfo[1].pNext						= DE_NULL;
+		queueInfo[1].flags						= (VkDeviceQueueCreateFlags)0u;
+		queueInfo[1].queueFamilyIndex			= sparseQueueIndex;
+		queueInfo[1].queueCount					= 1u;
+		queueInfo[1].pQueuePriorities			= &queuePriority;
+	}
 
+	// VK_KHR_get_physical_device_properties2 is used if enabledFeatures.pNext != 0
 	deviceInfo.sType						= VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	deviceInfo.pNext						= enabledFeatures.pNext ? &enabledFeatures : DE_NULL;
-	deviceInfo.queueCreateInfoCount			= 1u;
-	deviceInfo.pQueueCreateInfos			= &queueInfo;
+	deviceInfo.queueCreateInfoCount			= numQueues;
+	deviceInfo.pQueueCreateInfos			= queueInfo;
 	deviceInfo.enabledExtensionCount		= (deUint32)extensionPtrs.size();
 	deviceInfo.ppEnabledExtensionNames		= (extensionPtrs.empty() ? DE_NULL : &extensionPtrs[0]);
 	deviceInfo.enabledLayerCount			= (deUint32)layerPtrs.size();
 	deviceInfo.ppEnabledLayerNames			= (layerPtrs.empty() ? DE_NULL : &layerPtrs[0]);
 	deviceInfo.pEnabledFeatures				= enabledFeatures.pNext ? DE_NULL : &enabledFeatures.features;
 
-	return createDevice(vki, physicalDevice, &deviceInfo);
+	return createDevice(vkp, instance, vki, physicalDevice, &deviceInfo);
 };
 
 bool isPhysicalDeviceFeatures2Supported (const deUint32 version, const vector<string>& instanceExtensions)
@@ -293,8 +306,15 @@ bool isPhysicalDeviceFeatures2Supported (const deUint32 version, const vector<st
 class DeviceFeatures
 {
 public:
-	VkPhysicalDeviceFeatures2						coreFeatures;
-	VkPhysicalDeviceSamplerYcbcrConversionFeatures	samplerYCbCrConversionFeatures;
+	VkPhysicalDeviceFeatures2							coreFeatures;
+	VkPhysicalDeviceSamplerYcbcrConversionFeatures		samplerYCbCrConversionFeatures;
+	VkPhysicalDevice8BitStorageFeaturesKHR				eightBitStorageFeatures;
+	VkPhysicalDevice16BitStorageFeatures				sixteenBitStorageFeatures;
+	VkPhysicalDeviceVariablePointerFeatures				variablePointerFeatures;
+	VkPhysicalDeviceDescriptorIndexingFeaturesEXT		descriptorIndexingFeatures;
+	VkPhysicalDeviceInlineUniformBlockFeaturesEXT		inlineUniformBlockFeatures;
+	VkPhysicalDeviceVulkanMemoryModelFeaturesKHR		vulkanMemoryModelFeatures;
+	VkPhysicalDeviceShaderAtomicInt64FeaturesKHR		shaderAtomicInt64Features;
 
 	DeviceFeatures (const InstanceInterface&	vki,
 					const deUint32				apiVersion,
@@ -304,14 +324,69 @@ public:
 	{
 		deMemset(&coreFeatures, 0, sizeof(coreFeatures));
 		deMemset(&samplerYCbCrConversionFeatures, 0, sizeof(samplerYCbCrConversionFeatures));
+		deMemset(&eightBitStorageFeatures, 0, sizeof(eightBitStorageFeatures));
+		deMemset(&sixteenBitStorageFeatures, 0, sizeof(sixteenBitStorageFeatures));
+		deMemset(&variablePointerFeatures, 0, sizeof(variablePointerFeatures));
+		deMemset(&descriptorIndexingFeatures, 0, sizeof(descriptorIndexingFeatures));
+		deMemset(&inlineUniformBlockFeatures, 0, sizeof(inlineUniformBlockFeatures));
+		deMemset(&vulkanMemoryModelFeatures, 0, sizeof(vulkanMemoryModelFeatures));
+		deMemset(&shaderAtomicInt64Features, 0, sizeof(shaderAtomicInt64Features));
 
 		coreFeatures.sType						= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 		samplerYCbCrConversionFeatures.sType	= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES;
+		eightBitStorageFeatures.sType			= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES_KHR;
+		sixteenBitStorageFeatures.sType			= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES_KHR;
+		variablePointerFeatures.sType			= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTER_FEATURES_KHR;
+		descriptorIndexingFeatures.sType		= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+		inlineUniformBlockFeatures.sType		= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INLINE_UNIFORM_BLOCK_FEATURES_EXT;
+		vulkanMemoryModelFeatures.sType			= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES_KHR;
+		shaderAtomicInt64Features.sType			= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES_KHR;
+
 
 		if (isPhysicalDeviceFeatures2Supported(apiVersion, instanceExtensions))
 		{
+			void** nextPtr = &coreFeatures.pNext;
+
 			if (de::contains(deviceExtensions.begin(), deviceExtensions.end(), "VK_KHR_sampler_ycbcr_conversion"))
-				coreFeatures.pNext = &samplerYCbCrConversionFeatures;
+			{
+				*nextPtr	= &samplerYCbCrConversionFeatures;
+				nextPtr		= &samplerYCbCrConversionFeatures.pNext;
+			}
+			if (de::contains(deviceExtensions.begin(), deviceExtensions.end(), "VK_KHR_8bit_storage"))
+			{
+				*nextPtr	= &eightBitStorageFeatures;
+				nextPtr		= &eightBitStorageFeatures.pNext;
+			}
+			if (de::contains(deviceExtensions.begin(), deviceExtensions.end(), "VK_KHR_16bit_storage"))
+			{
+				*nextPtr	= &sixteenBitStorageFeatures;
+				nextPtr		= &sixteenBitStorageFeatures.pNext;
+			}
+			if (de::contains(deviceExtensions.begin(), deviceExtensions.end(), "VK_KHR_variable_pointers"))
+			{
+				*nextPtr	= &variablePointerFeatures;
+				nextPtr		= &variablePointerFeatures.pNext;
+			}
+			if (de::contains(deviceExtensions.begin(), deviceExtensions.end(), "VK_EXT_descriptor_indexing"))
+			{
+				*nextPtr	= &descriptorIndexingFeatures;
+				nextPtr		= &descriptorIndexingFeatures.pNext;
+			}
+			if (de::contains(deviceExtensions.begin(), deviceExtensions.end(), "VK_EXT_inline_uniform_block"))
+			{
+				*nextPtr	= &inlineUniformBlockFeatures;
+				nextPtr		= &inlineUniformBlockFeatures.pNext;
+			}
+			if (de::contains(deviceExtensions.begin(), deviceExtensions.end(), "VK_KHR_vulkan_memory_model"))
+			{
+				*nextPtr	= &vulkanMemoryModelFeatures;
+				nextPtr		= &vulkanMemoryModelFeatures.pNext;
+			}
+			if (de::contains(deviceExtensions.begin(), deviceExtensions.end(), "VK_KHR_shader_atomic_int64"))
+			{
+				*nextPtr	= &shaderAtomicInt64Features;
+				nextPtr		= &shaderAtomicInt64Features.pNext;
+			}
 
 			vki.getPhysicalDeviceFeatures2(physicalDevice, &coreFeatures);
 		}
@@ -341,6 +416,11 @@ public:
 	const VkPhysicalDeviceFeatures&							getDeviceFeatures					(void) const	{ return m_deviceFeatures.coreFeatures.features;			}
 	const VkPhysicalDeviceFeatures2&						getDeviceFeatures2					(void) const	{ return m_deviceFeatures.coreFeatures; }
 	const VkPhysicalDeviceSamplerYcbcrConversionFeatures&	getSamplerYCbCrConversionFeatures	(void) const	{ return m_deviceFeatures.samplerYCbCrConversionFeatures;	}
+	const VkPhysicalDevice8BitStorageFeaturesKHR&			get8BitStorageFeatures				(void) const	{ return m_deviceFeatures.eightBitStorageFeatures;			}
+	const VkPhysicalDevice16BitStorageFeatures&				get16BitStorageFeatures				(void) const	{ return m_deviceFeatures.sixteenBitStorageFeatures;		}
+	const VkPhysicalDeviceVariablePointerFeatures&			getVariablePointerFeatures			(void) const	{ return m_deviceFeatures.variablePointerFeatures;			}
+	const VkPhysicalDeviceVulkanMemoryModelFeaturesKHR&		getVulkanMemoryModelFeatures		(void) const	{ return m_deviceFeatures.vulkanMemoryModelFeatures;	}
+	const VkPhysicalDeviceShaderAtomicInt64FeaturesKHR&		getShaderAtomicInt64Features		(void) const	{ return m_deviceFeatures.shaderAtomicInt64Features;	}
 	VkDevice												getDevice							(void) const	{ return *m_device;											}
 	const DeviceInterface&									getDeviceInterface					(void) const	{ return m_deviceInterface;									}
 	const VkPhysicalDeviceProperties&						getDeviceProperties					(void) const	{ return m_deviceProperties;								}
@@ -350,6 +430,8 @@ public:
 
 	deUint32												getUniversalQueueFamilyIndex		(void) const	{ return m_universalQueueFamilyIndex;						}
 	VkQueue													getUniversalQueue					(void) const;
+	deUint32												getSparseQueueFamilyIndex		(void) const	{ return m_sparseQueueFamilyIndex;					}
+	VkQueue													getSparseQueue					(void) const;
 
 private:
 
@@ -365,21 +447,27 @@ private:
 	const VkPhysicalDevice				m_physicalDevice;
 	const deUint32						m_deviceVersion;
 
-	const deUint32						m_universalQueueFamilyIndex;
-	const VkPhysicalDeviceProperties	m_deviceProperties;
-
 	const vector<string>				m_deviceExtensions;
 	const DeviceFeatures				m_deviceFeatures;
+
+	const deUint32						m_universalQueueFamilyIndex;
+	const deUint32						m_sparseQueueFamilyIndex;
+	const VkPhysicalDeviceProperties	m_deviceProperties;
 
 	const Unique<VkDevice>				m_device;
 	const DeviceDriver					m_deviceInterface;
 
 };
 
+static deUint32 sanitizeApiVersion(deUint32 v)
+{
+	return VK_MAKE_VERSION( VK_VERSION_MAJOR(v), VK_VERSION_MINOR(v), 0 );
+}
+
 DefaultDevice::DefaultDevice (const PlatformInterface& vkPlatform, const tcu::CommandLine& cmdLine)
 	: m_availableInstanceVersion	(getTargetInstanceVersion(vkPlatform))
 	, m_deviceVersions				(determineDeviceVersions(vkPlatform, m_availableInstanceVersion, cmdLine))
-	, m_usedApiVersion				(deMinu32(m_availableInstanceVersion, m_deviceVersions.first))
+	, m_usedApiVersion				(sanitizeApiVersion(deMinu32(m_availableInstanceVersion, m_deviceVersions.first)))
 
 	, m_instanceExtensions			(addCoreInstanceExtensions(filterExtensions(enumerateInstanceExtensionProperties(vkPlatform, DE_NULL)), m_usedApiVersion))
 	, m_instance					(createInstance(vkPlatform, m_usedApiVersion, m_instanceExtensions, cmdLine))
@@ -388,12 +476,13 @@ DefaultDevice::DefaultDevice (const PlatformInterface& vkPlatform, const tcu::Co
 	, m_physicalDevice				(chooseDevice(m_instanceInterface, *m_instance, cmdLine))
 	, m_deviceVersion				(getPhysicalDeviceProperties(m_instanceInterface, m_physicalDevice).apiVersion)
 
-	, m_universalQueueFamilyIndex	(findQueueFamilyIndexWithCaps(m_instanceInterface, m_physicalDevice, VK_QUEUE_GRAPHICS_BIT|VK_QUEUE_COMPUTE_BIT))
-	, m_deviceProperties			(getPhysicalDeviceProperties(m_instanceInterface, m_physicalDevice))
 	, m_deviceExtensions			(addCoreDeviceExtensions(filterExtensions(enumerateDeviceExtensionProperties(m_instanceInterface, m_physicalDevice, DE_NULL)), m_usedApiVersion))
 	, m_deviceFeatures				(m_instanceInterface, m_usedApiVersion, m_physicalDevice, m_instanceExtensions, m_deviceExtensions)
-	, m_device						(createDefaultDevice(m_instanceInterface, m_physicalDevice, m_usedApiVersion, m_universalQueueFamilyIndex, m_deviceFeatures.coreFeatures, m_deviceExtensions, cmdLine))
-	, m_deviceInterface				(m_instanceInterface, *m_device)
+	, m_universalQueueFamilyIndex	(findQueueFamilyIndexWithCaps(m_instanceInterface, m_physicalDevice, VK_QUEUE_GRAPHICS_BIT|VK_QUEUE_COMPUTE_BIT))
+	, m_sparseQueueFamilyIndex		(m_deviceFeatures.coreFeatures.features.sparseBinding ? findQueueFamilyIndexWithCaps(m_instanceInterface, m_physicalDevice, VK_QUEUE_SPARSE_BINDING_BIT) : 0)
+	, m_deviceProperties			(getPhysicalDeviceProperties(m_instanceInterface, m_physicalDevice))
+	, m_device						(createDefaultDevice(vkPlatform, *m_instance, m_instanceInterface, m_physicalDevice, m_usedApiVersion, m_universalQueueFamilyIndex, m_sparseQueueFamilyIndex, m_deviceFeatures.coreFeatures, m_deviceExtensions, cmdLine))
+	, m_deviceInterface				(vkPlatform, *m_instance, *m_device)
 {
 	DE_ASSERT(m_deviceVersions.first == m_deviceVersion);
 }
@@ -407,6 +496,16 @@ VkQueue DefaultDevice::getUniversalQueue (void) const
 	return getDeviceQueue(m_deviceInterface, *m_device, m_universalQueueFamilyIndex, 0);
 }
 
+VkQueue DefaultDevice::getSparseQueue (void) const
+{
+	if (!m_deviceFeatures.coreFeatures.features.sparseBinding)
+		TCU_THROW(NotSupportedError, "Sparse binding not supported.");
+
+	return getDeviceQueue(m_deviceInterface, *m_device, m_sparseQueueFamilyIndex, 0);
+}
+
+namespace
+{
 // Allocator utilities
 
 vk::Allocator* createAllocator (DefaultDevice* device)
@@ -416,6 +515,8 @@ vk::Allocator* createAllocator (DefaultDevice* device)
 	// \todo [2015-07-24 jarkko] support allocator selection/configuration from command line (or compile time)
 	return new SimpleAllocator(device->getDeviceInterface(), device->getDevice(), memoryProperties);
 }
+
+} // anonymous
 
 // Context
 
@@ -445,12 +546,24 @@ const vk::VkPhysicalDeviceFeatures2&	Context::getDeviceFeatures2				(void) const
 const vk::VkPhysicalDeviceSamplerYcbcrConversionFeatures&
 										Context::getSamplerYCbCrConversionFeatures
 																				(void) const { return m_device->getSamplerYCbCrConversionFeatures();	}
+const vk::VkPhysicalDevice8BitStorageFeaturesKHR&
+										Context::get8BitStorageFeatures			(void) const { return m_device->get8BitStorageFeatures();		}
+const vk::VkPhysicalDevice16BitStorageFeatures&
+										Context::get16BitStorageFeatures		(void) const { return m_device->get16BitStorageFeatures();		}
+const vk::VkPhysicalDeviceVariablePointerFeatures&
+										Context::getVariablePointerFeatures		(void) const { return m_device->getVariablePointerFeatures();	}
+const vk::VkPhysicalDeviceVulkanMemoryModelFeaturesKHR&
+										Context::getVulkanMemoryModelFeatures	(void) const { return m_device->getVulkanMemoryModelFeatures();	}
+const vk::VkPhysicalDeviceShaderAtomicInt64FeaturesKHR&
+										Context::getShaderAtomicInt64Features	(void) const { return m_device->getShaderAtomicInt64Features();	}
 const vk::VkPhysicalDeviceProperties&	Context::getDeviceProperties			(void) const { return m_device->getDeviceProperties();			}
 const vector<string>&					Context::getDeviceExtensions			(void) const { return m_device->getDeviceExtensions();			}
 vk::VkDevice							Context::getDevice						(void) const { return m_device->getDevice();					}
 const vk::DeviceInterface&				Context::getDeviceInterface				(void) const { return m_device->getDeviceInterface();			}
 deUint32								Context::getUniversalQueueFamilyIndex	(void) const { return m_device->getUniversalQueueFamilyIndex();	}
 vk::VkQueue								Context::getUniversalQueue				(void) const { return m_device->getUniversalQueue();			}
+deUint32								Context::getSparseQueueFamilyIndex		(void) const { return m_device->getSparseQueueFamilyIndex();	}
+vk::VkQueue								Context::getSparseQueue					(void) const { return m_device->getSparseQueue();				}
 vk::Allocator&							Context::getDefaultAllocator			(void) const { return *m_allocator;								}
 deUint32								Context::getUsedApiVersion				(void) const { return m_device->getUsedApiVersion();			}
 bool									Context::contextSupports				(const deUint32 majorNum, const deUint32 minorNum, const deUint32 patchNum) const
@@ -476,9 +589,97 @@ bool Context::requireInstanceExtension (const std::string& required)
 	return true;
 }
 
+struct DeviceCoreFeaturesTable
+{
+	const char*		featureName;
+	const deUint32	featureArrayIndex;
+	const deUint32	featureArrayOffset;
+};
+
+#define DEVICE_CORE_FEATURE_OFFSET(FEATURE_FIELD_NAME)	DE_OFFSET_OF(VkPhysicalDeviceFeatures, FEATURE_FIELD_NAME)
+#define DEVICE_CORE_FEATURE_ENTRY(BITNAME, FIELDNAME)	{ #FIELDNAME, BITNAME, DEVICE_CORE_FEATURE_OFFSET(FIELDNAME) }
+
+const DeviceCoreFeaturesTable	deviceCoreFeaturesTable[] =
+{
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_ROBUST_BUFFER_ACCESS							,	robustBufferAccess						),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_FULL_DRAW_INDEX_UINT32						,	fullDrawIndexUint32						),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_IMAGE_CUBE_ARRAY								,	imageCubeArray							),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_INDEPENDENT_BLEND								,	independentBlend						),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_GEOMETRY_SHADER								,	geometryShader							),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_TESSELLATION_SHADER							,	tessellationShader						),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SAMPLE_RATE_SHADING							,	sampleRateShading						),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_DUAL_SRC_BLEND								,	dualSrcBlend							),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_LOGIC_OP										,	logicOp									),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_MULTI_DRAW_INDIRECT							,	multiDrawIndirect						),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_DRAW_INDIRECT_FIRST_INSTANCE					,	drawIndirectFirstInstance				),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_DEPTH_CLAMP									,	depthClamp								),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_DEPTH_BIAS_CLAMP								,	depthBiasClamp							),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_FILL_MODE_NON_SOLID							,	fillModeNonSolid						),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_DEPTH_BOUNDS									,	depthBounds								),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_WIDE_LINES									,	wideLines								),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_LARGE_POINTS									,	largePoints								),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_ALPHA_TO_ONE									,	alphaToOne								),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_MULTI_VIEWPORT								,	multiViewport							),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SAMPLER_ANISOTROPY							,	samplerAnisotropy						),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_TEXTURE_COMPRESSION_ETC2						,	textureCompressionETC2					),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_TEXTURE_COMPRESSION_ASTC_LDR					,	textureCompressionASTC_LDR				),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_TEXTURE_COMPRESSION_BC						,	textureCompressionBC					),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_OCCLUSION_QUERY_PRECISE						,	occlusionQueryPrecise					),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_PIPELINE_STATISTICS_QUERY						,	pipelineStatisticsQuery					),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_VERTEX_PIPELINE_STORES_AND_ATOMICS			,	vertexPipelineStoresAndAtomics			),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_FRAGMENT_STORES_AND_ATOMICS					,	fragmentStoresAndAtomics				),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_TESSELLATION_AND_GEOMETRY_POINT_SIZE	,	shaderTessellationAndGeometryPointSize	),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_IMAGE_GATHER_EXTENDED					,	shaderImageGatherExtended				),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_STORAGE_IMAGE_EXTENDED_FORMATS			,	shaderStorageImageExtendedFormats		),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_STORAGE_IMAGE_MULTISAMPLE				,	shaderStorageImageMultisample			),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_STORAGE_IMAGE_READ_WITHOUT_FORMAT		,	shaderStorageImageReadWithoutFormat		),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_STORAGE_IMAGE_WRITE_WITHOUT_FORMAT		,	shaderStorageImageWriteWithoutFormat	),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING	,	shaderUniformBufferArrayDynamicIndexing	),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING	,	shaderSampledImageArrayDynamicIndexing	),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING	,	shaderStorageBufferArrayDynamicIndexing	),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_STORAGE_IMAGE_ARRAY_DYNAMIC_INDEXING	,	shaderStorageImageArrayDynamicIndexing	),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_CLIP_DISTANCE							,	shaderClipDistance						),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_CULL_DISTANCE							,	shaderCullDistance						),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_FLOAT64								,	shaderFloat64							),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_INT64									,	shaderInt64								),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_INT16									,	shaderInt16								),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_RESOURCE_RESIDENCY						,	shaderResourceResidency					),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SHADER_RESOURCE_MIN_LOD						,	shaderResourceMinLod					),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SPARSE_BINDING								,	sparseBinding							),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SPARSE_RESIDENCY_BUFFER						,	sparseResidencyBuffer					),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SPARSE_RESIDENCY_IMAGE2D						,	sparseResidencyImage2D					),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SPARSE_RESIDENCY_IMAGE3D						,	sparseResidencyImage3D					),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SPARSE_RESIDENCY2_SAMPLES						,	sparseResidency2Samples					),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SPARSE_RESIDENCY4_SAMPLES						,	sparseResidency4Samples					),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SPARSE_RESIDENCY8_SAMPLES						,	sparseResidency8Samples					),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SPARSE_RESIDENCY16_SAMPLES					,	sparseResidency16Samples				),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_SPARSE_RESIDENCY_ALIASED						,	sparseResidencyAliased					),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_VARIABLE_MULTISAMPLE_RATE						,	variableMultisampleRate					),
+	DEVICE_CORE_FEATURE_ENTRY(DEVICE_CORE_FEATURE_INHERITED_QUERIES								,	inheritedQueries						),
+};
+
+bool Context::requireDeviceCoreFeature (const DeviceCoreFeature requiredFeature)
+{
+	const vk::VkPhysicalDeviceFeatures& featuresAvailable		= getDeviceFeatures();
+	const vk::VkBool32*					featuresAvailableArray	= (vk::VkBool32*)(&featuresAvailable);
+	const deUint32						requiredFeatureIndex	= static_cast<deUint32>(requiredFeature);
+
+	DE_ASSERT(requiredFeatureIndex * sizeof(vk::VkBool32) < sizeof(featuresAvailable));
+	DE_ASSERT(deviceCoreFeaturesTable[requiredFeatureIndex].featureArrayIndex * sizeof(vk::VkBool32) == deviceCoreFeaturesTable[requiredFeatureIndex].featureArrayOffset);
+
+	if (featuresAvailableArray[requiredFeatureIndex] == DE_FALSE)
+		TCU_THROW(NotSupportedError, "Requested core feature is not supported: " + std::string(deviceCoreFeaturesTable[requiredFeatureIndex].featureName));
+
+	return true;
+}
+
 // TestCase
 
 void TestCase::initPrograms (SourceCollections&) const
+{
+}
+
+void TestCase::checkSupport (Context&) const
 {
 }
 

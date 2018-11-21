@@ -18,7 +18,8 @@ include $(LOCAL_PATH)/AndroidGen.mk
 LOCAL_C_INCLUDES += \
 	frameworks/native/opengl/include \
 	external/libpng \
-	external/zlib
+	external/zlib \
+	external/shaderc/spirv-headers/include
 
 deqp_compile_flags := \
 	-DDEQP_SUPPORT_GLES1=1 \

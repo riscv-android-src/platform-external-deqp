@@ -122,12 +122,6 @@ bool							isImageSizeSupported				(const vk::InstanceInterface&		instance,
 																	 const ImageType					imageType,
 																	 const tcu::UVec3&					imageSize);
 
-vk::VkExtent3D					mipLevelExtents						(const vk::VkExtent3D&				baseExtents,
-																	 const deUint32						mipLevel);
-
-tcu::UVec3						mipLevelExtents						(const tcu::UVec3&					baseExtents,
-																	 const deUint32						mipLevel);
-
 deUint32						getImageMaxMipLevels				(const vk::VkImageFormatProperties& imageFormatProperties,
 																	 const vk::VkExtent3D&				extent);
 
@@ -245,12 +239,6 @@ vk::VkSparseMemoryBind			makeSparseMemoryBind				(const vk::DeviceInterface&			v
 																	 const vk::VkDeviceSize				resourceOffset,
 																	 const vk::VkSparseMemoryBindFlags	flags			= 0u);
 
-void							beginCommandBuffer					(const vk::DeviceInterface&			vk,
-																	 const vk::VkCommandBuffer			cmdBuffer);
-
-void							endCommandBuffer					(const vk::DeviceInterface&			vk,
-																	 const vk::VkCommandBuffer			cmdBuffer);
-
 void							submitCommands						(const vk::DeviceInterface&			vk,
 																	 const vk::VkQueue					queue,
 																	 const vk::VkCommandBuffer			cmdBuffer,
@@ -280,6 +268,10 @@ deUint32						findMatchingMemoryType				(const vk::InstanceInterface&		instance,
 																	 const vk::VkPhysicalDevice			physicalDevice,
 																	 const vk::VkMemoryRequirements&	objectMemoryRequirements,
 																	 const vk::MemoryRequirement&		memoryRequirement);
+
+deUint32						getHeapIndexForMemoryType			(const vk::InstanceInterface&		instance,
+																	 const vk::VkPhysicalDevice			physicalDevice,
+																	 const deUint32						memoryType);
 
 bool							checkSparseSupportForImageType		(const vk::InstanceInterface&		instance,
 																	 const vk::VkPhysicalDevice			physicalDevice,

@@ -10,6 +10,8 @@ include_directories(
 	)
 
 set(GLCTS_COMMON_SRCS
+	glcAggressiveShaderOptimizationsTests.cpp
+	glcAggressiveShaderOptimizationsTests.hpp
 	glcBlendEquationAdvancedTests.cpp
 	glcBlendEquationAdvancedTests.hpp
 	glcConfigList.hpp
@@ -32,12 +34,24 @@ set(GLCTS_COMMON_SRCS
 	glcFragDepthTests.hpp
 	glcInfoTests.cpp
 	glcInfoTests.hpp
+	glcInternalformatTests.cpp
+	glcInternalformatTests.hpp
+	glcMisc.cpp
+	glcMisc.hpp
+	glcKHRDebugTests.cpp
+	glcKHRDebugTests.hpp
+	glcMultipleContextsTests.cpp
+	glcMultipleContextsTests.hpp
 	glcNoErrorTests.cpp
 	glcNoErrorTests.hpp
 	glcRobustnessTests.cpp
 	glcRobustnessTests.hpp
+	glcPackedPixelsTests.cpp
+	glcPackedPixelsTests.hpp
 	glcPolygonOffsetClampTests.cpp
 	glcPolygonOffsetClampTests.hpp
+	glcPackedDepthStencilTests.cpp
+	glcPackedDepthStencilTests.hpp
 	glcParallelShaderCompileTests.cpp
 	glcParallelShaderCompileTests.hpp
 	glcRobustBufferAccessBehaviorTests.cpp
@@ -46,6 +60,8 @@ set(GLCTS_COMMON_SRCS
 	glcSeparableProgramsTransformFeedbackTests.hpp
 	glcShaderConstExprTests.hpp
 	glcShaderConstExprTests.cpp
+	glcShaderGroupVoteTests.cpp
+	glcShaderGroupVoteTests.hpp
 	glcShaderIndexingTests.cpp
 	glcShaderIndexingTests.hpp
 	glcShaderIntegerMixTests.cpp
@@ -58,6 +74,8 @@ set(GLCTS_COMMON_SRCS
 	glcShaderLoopTests.hpp
 	glcShaderNegativeTests.hpp
 	glcShaderNegativeTests.cpp
+	glcShaderMacroTests.cpp
+	glcShaderMacroTests.hpp
 	glcShaderMultisampleInterpolationTests.cpp
 	glcShaderMultisampleInterpolationTests.hpp
 	glcShaderRenderCase.cpp
@@ -76,6 +94,8 @@ set(GLCTS_COMMON_SRCS
 	glcTestPackage.hpp
 	glcTextureFilterAnisotropicTests.cpp
 	glcTextureFilterAnisotropicTests.hpp
+	glcTextureRepeatModeTests.cpp
+	glcTextureRepeatModeTests.hpp
 	glcUniformBlockCase.cpp
 	glcUniformBlockCase.hpp
 	glcUniformBlockTests.cpp
@@ -86,6 +106,8 @@ set(GLCTS_COMMON_SRCS
 	glcTestSubcase.hpp
 	glcExtTokens.cpp
 	glcExtTokens.hpp
+	glcLayoutLocationTests.cpp
+	glcLayoutLocationTests.hpp
 	glcLimitTest.inl
 	glcLimitTest.hpp
 	glcWaiver.hpp

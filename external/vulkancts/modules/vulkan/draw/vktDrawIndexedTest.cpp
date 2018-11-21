@@ -36,6 +36,7 @@
 #include "tcuRGBA.hpp"
 
 #include "vkDefs.hpp"
+#include "vkCmdUtil.hpp"
 
 enum
 {
@@ -133,8 +134,9 @@ DrawIndexed::DrawIndexed (Context &context, TestSpec testSpec)
 
 tcu::TestStatus DrawIndexed::iterate (void)
 {
-	tcu::TestLog &log			= m_context.getTestContext().getLog();
-	const vk::VkQueue queue		= m_context.getUniversalQueue();
+	tcu::TestLog&		log		= m_context.getTestContext().getLog();
+	const vk::VkQueue	queue	= m_context.getUniversalQueue();
+	const vk::VkDevice	device	= m_context.getDevice();
 
 	beginRenderPass();
 
@@ -152,7 +154,7 @@ tcu::TestStatus DrawIndexed::iterate (void)
 	vk::flushMappedMemoryRange(m_vk, m_context.getDevice(),
 							   m_indexBuffer->getBoundMemory().getMemory(),
 							   m_indexBuffer->getBoundMemory().getOffset(),
-							   dataSize);
+							   VK_WHOLE_SIZE);
 
 	const vk::VkDeviceSize vertexBufferOffset = 0;
 	const vk::VkBuffer vertexBuffer = m_vertexBuffer->object();
@@ -165,25 +167,10 @@ tcu::TestStatus DrawIndexed::iterate (void)
 
 	m_vk.cmdDrawIndexed(*m_cmdBuffer, 6, 1, 2, VERTEX_OFFSET, 0);
 
-	m_vk.cmdEndRenderPass(*m_cmdBuffer);
-	m_vk.endCommandBuffer(*m_cmdBuffer);
+	endRenderPass(m_vk, *m_cmdBuffer);
+	endCommandBuffer(m_vk, *m_cmdBuffer);
 
-	vk::VkSubmitInfo submitInfo =
-	{
-		vk::VK_STRUCTURE_TYPE_SUBMIT_INFO,	// VkStructureType			sType;
-		DE_NULL,							// const void*				pNext;
-		0,										// deUint32					waitSemaphoreCount;
-		DE_NULL,								// const VkSemaphore*		pWaitSemaphores;
-		(const vk::VkPipelineStageFlags*)DE_NULL,
-		1,										// deUint32					commandBufferCount;
-		&m_cmdBuffer.get(),					// const VkCommandBuffer*	pCommandBuffers;
-		0,										// deUint32					signalSemaphoreCount;
-		DE_NULL								// const VkSemaphore*		pSignalSemaphores;
-	};
-
-	VK_CHECK(m_vk.queueSubmit(queue, 1, &submitInfo, DE_NULL));
-
-	VK_CHECK(m_vk.queueWaitIdle(queue));
+	submitCommandsAndWait(m_vk, device, queue, m_cmdBuffer.get());
 
 	// Validation
 	tcu::Texture2D referenceFrame(vk::mapVkFormat(m_colorAttachmentFormat), (int)(0.5 + WIDTH), (int)(0.5 + HEIGHT));
@@ -234,8 +221,9 @@ DrawInstancedIndexed::DrawInstancedIndexed (Context &context, TestSpec testSpec)
 
 tcu::TestStatus DrawInstancedIndexed::iterate (void)
 {
-	tcu::TestLog &log		= m_context.getTestContext().getLog();
-	const vk::VkQueue queue = m_context.getUniversalQueue();
+	tcu::TestLog&		log		= m_context.getTestContext().getLog();
+	const vk::VkQueue	queue	= m_context.getUniversalQueue();
+	const vk::VkDevice	device	= m_context.getDevice();
 
 	beginRenderPass();
 
@@ -252,7 +240,7 @@ tcu::TestStatus DrawInstancedIndexed::iterate (void)
 	vk::flushMappedMemoryRange(m_vk, m_context.getDevice(),
 							   m_indexBuffer->getBoundMemory().getMemory(),
 							   m_indexBuffer->getBoundMemory().getOffset(),
-							   dataSize);
+							   VK_WHOLE_SIZE);
 
 	const vk::VkDeviceSize vertexBufferOffset = 0;
 	const vk::VkBuffer vertexBuffer = m_vertexBuffer->object();
@@ -287,24 +275,10 @@ tcu::TestStatus DrawInstancedIndexed::iterate (void)
 			break;
 	}
 
-	m_vk.cmdEndRenderPass(*m_cmdBuffer);
-	m_vk.endCommandBuffer(*m_cmdBuffer);
+	endRenderPass(m_vk, *m_cmdBuffer);
+	endCommandBuffer(m_vk, *m_cmdBuffer);
 
-	vk::VkSubmitInfo submitInfo =
-	{
-		vk::VK_STRUCTURE_TYPE_SUBMIT_INFO,	// VkStructureType			sType;
-		DE_NULL,							// const void*				pNext;
-		0,										// deUint32					waitSemaphoreCount;
-		DE_NULL,								// const VkSemaphore*		pWaitSemaphores;
-		(const vk::VkPipelineStageFlags*)DE_NULL,
-		1,										// deUint32					commandBufferCount;
-		&m_cmdBuffer.get(),					// const VkCommandBuffer*	pCommandBuffers;
-		0,										// deUint32					signalSemaphoreCount;
-		DE_NULL								// const VkSemaphore*		pSignalSemaphores;
-	};
-	VK_CHECK(m_vk.queueSubmit(queue, 1, &submitInfo, DE_NULL));
-
-	VK_CHECK(m_vk.queueWaitIdle(queue));
+	submitCommandsAndWait(m_vk, device, queue, m_cmdBuffer.get());
 
 	// Validation
 	VK_CHECK(m_vk.queueWaitIdle(queue));

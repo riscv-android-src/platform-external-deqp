@@ -25,6 +25,7 @@
 #include "vkTypeUtil.hpp"
 #include "vkPrograms.hpp"
 #include "vkQueryUtil.hpp"
+#include "vkCmdUtil.hpp"
 #include <vector>
 
 namespace vkt
@@ -192,41 +193,6 @@ Move<VkImageView> makeImageView (const DeviceInterface&			vk,
 		subresourceRange,								// VkImageSubresourceRange	subresourceRange;
 	};
 	return createImageView(vk, vkDevice, &imageViewParams);
-}
-
-void beginCommandBuffer (const DeviceInterface& vk, const VkCommandBuffer commandBuffer)
-{
-	const VkCommandBufferBeginInfo info =
-	{
-		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,	// VkStructureType                          sType;
-		DE_NULL,										// const void*                              pNext;
-		VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,	// VkCommandBufferUsageFlags                flags;
-		DE_NULL,										// const VkCommandBufferInheritanceInfo*    pInheritanceInfo;
-	};
-	VK_CHECK(vk.beginCommandBuffer(commandBuffer, &info));
-}
-
-void submitCommandsAndWait (const DeviceInterface&	vk,
-							const VkDevice			device,
-							const VkQueue			queue,
-							const VkCommandBuffer	commandBuffer)
-{
-	const Unique<VkFence> fence(createFence(vk, device));
-
-	const VkSubmitInfo submitInfo =
-	{
-		VK_STRUCTURE_TYPE_SUBMIT_INFO,		// VkStructureType                sType;
-		DE_NULL,							// const void*                    pNext;
-		0u,									// uint32_t                       waitSemaphoreCount;
-		DE_NULL,							// const VkSemaphore*             pWaitSemaphores;
-		DE_NULL,							// const VkPipelineStageFlags*    pWaitDstStageMask;
-		1u,									// uint32_t                       commandBufferCount;
-		&commandBuffer,						// const VkCommandBuffer*         pCommandBuffers;
-		0u,									// uint32_t                       signalSemaphoreCount;
-		DE_NULL,							// const VkSemaphore*             pSignalSemaphores;
-	};
-	VK_CHECK(vk.queueSubmit(queue, 1u, &submitInfo, *fence));
-	VK_CHECK(vk.waitForFences(device, 1u, &fence.get(), DE_TRUE, ~0ull));
 }
 
 Move<VkFramebuffer> makeFramebuffer (const DeviceInterface&		vk,

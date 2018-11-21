@@ -1013,7 +1013,9 @@ static vk::Move<vk::VkDeviceMemory> importMemory (const vk::DeviceInterface&				
 		};
 		vk::Move<vk::VkDeviceMemory> memory (vk::allocateMemory(vkd, device, &info));
 
-		handle.disown();
+		// The handle's owned reference must also be released. Do not discard the handle below.
+		if (externalType != vk::VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT)
+			handle.disown();
 
 		return memory;
 	}
@@ -1197,6 +1199,11 @@ static deInt32 checkAnbApiBuild()
 bool AndroidHardwareBufferExternalApi::supportsAhb()
 {
 	return (checkAnbApiBuild() >= __ANDROID_API_O__);
+}
+
+bool AndroidHardwareBufferExternalApi::supportsCubeMap()
+{
+	return (checkAnbApiBuild() >= 28);
 }
 
 AndroidHardwareBufferExternalApi::AndroidHardwareBufferExternalApi()
@@ -1463,8 +1470,8 @@ AndroidHardwareBufferExternalApi* AndroidHardwareBufferExternalApi::getInstance(
 		static AndroidHardwareBufferExternalApi28 api28Instance;
 		return &api28Instance;
 	}
-	else
-#  elif defined(__ANDROID_API_O__) && (DE_ANDROID_API >= __ANDROID_API_O__)
+#  endif
+#  if defined(__ANDROID_API_O__) && (DE_ANDROID_API >= __ANDROID_API_O__)
 	if (sdkVersion >= __ANDROID_API_O__ )
 	{
 		static AndroidHardwareBufferExternalApi26 api26Instance;

@@ -30,6 +30,7 @@
 #include "vkRef.hpp"
 #include "vkRefUtil.hpp"
 #include "vkDeviceUtil.hpp"
+#include "vkCmdUtil.hpp"
 
 #include "tcuTestLog.hpp"
 #include "tcuFormatUtil.hpp"
@@ -40,6 +41,7 @@
 #include "vkQueryUtil.hpp"
 #include "vkPrograms.hpp"
 #include "vkTypeUtil.hpp"
+#include "vkCmdUtil.hpp"
 
 #include <limits>
 
@@ -85,7 +87,7 @@ void buildShaders (SourceCollections& shaderCollection)
 				"}\n");
 }
 
-Move<VkDevice> createTestDevice (const InstanceInterface& vki, VkPhysicalDevice physicalDevice, deUint32 *outQueueFamilyIndex)
+Move<VkDevice> createTestDevice (const PlatformInterface& vkp, VkInstance instance, const InstanceInterface& vki, VkPhysicalDevice physicalDevice, deUint32 *outQueueFamilyIndex)
 {
 	VkDeviceQueueCreateInfo		queueInfo;
 	VkDeviceCreateInfo			deviceInfo;
@@ -136,7 +138,7 @@ Move<VkDevice> createTestDevice (const InstanceInterface& vki, VkPhysicalDevice 
 
 	*outQueueFamilyIndex					= queueInfo.queueFamilyIndex;
 
-	return createDevice(vki, physicalDevice, &deviceInfo);
+	return createDevice(vkp, instance, vki, physicalDevice, &deviceInfo);
 };
 
 struct BufferParameters
@@ -461,29 +463,16 @@ struct RenderInfo
 void  recordRenderPass (const DeviceInterface& deviceInterface, const RenderInfo& renderInfo)
 {
 	const VkDeviceSize					bindingOffset			= 0;
-	const VkClearValue					clearValue				= makeClearValueColorF32(0.0, 0.0, 1.0, 1.0);
-	VkRenderPassBeginInfo				renderPassBeginState;
 	VkImageMemoryBarrier				renderBarrier;
-
-	deMemset(&renderPassBeginState, 0xcd, sizeof(renderPassBeginState));
-	renderPassBeginState.sType						= VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassBeginState.pNext						= DE_NULL;
-	renderPassBeginState.renderPass					= renderInfo.renderPass;
-	renderPassBeginState.framebuffer				= renderInfo.framebuffer;
-	renderPassBeginState.renderArea.offset.x		= 0;
-	renderPassBeginState.renderArea.offset.y		= 0;
-	renderPassBeginState.renderArea.extent.width	= renderInfo.width;
-	renderPassBeginState.renderArea.extent.height	= renderInfo.height;
-	renderPassBeginState.clearValueCount			= 1;
-	renderPassBeginState.pClearValues				= &clearValue;
 
 	if (renderInfo.waitEvent)
 		deviceInterface.cmdWaitEvents(renderInfo.commandBuffer, 1, &renderInfo.event, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, DE_NULL, 0, DE_NULL, 0, DE_NULL);
-	deviceInterface.cmdBeginRenderPass(renderInfo.commandBuffer, &renderPassBeginState, VK_SUBPASS_CONTENTS_INLINE);
+
+	beginRenderPass(deviceInterface, renderInfo.commandBuffer, renderInfo.renderPass, renderInfo.framebuffer, makeRect2D(0, 0, renderInfo.width, renderInfo.height), tcu::Vec4(0.0f, 0.0f, 1.0f, 1.0f));
 	deviceInterface.cmdBindPipeline(renderInfo.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, renderInfo.pipeline);
 	deviceInterface.cmdBindVertexBuffers(renderInfo.commandBuffer, 0u, 1u, &renderInfo.vertexBuffer, &bindingOffset);
 	deviceInterface.cmdDraw(renderInfo.commandBuffer, renderInfo.vertexBufferSize, 1, 0, 0);
-	deviceInterface.cmdEndRenderPass(renderInfo.commandBuffer);
+	endRenderPass(deviceInterface, renderInfo.commandBuffer);
 
 	deMemset(&renderBarrier, 0xcd, sizeof(renderBarrier));
 	renderBarrier.sType								= VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -972,7 +961,7 @@ void generateWork (TestContext& testContext)
 	bufferBarriers.resize(0);
 	imageBarriers.resize(0);
 
-	VK_CHECK(deviceInterface.endCommandBuffer(transferInfo.commandBuffer));
+	endCommandBuffer(deviceInterface, transferInfo.commandBuffer);
 }
 
 static void initSubmitInfo (VkSubmitInfo* submitInfo, deUint32 submitInfoCount)
@@ -1103,11 +1092,12 @@ tcu::TestStatus testFences (Context& context)
 tcu::TestStatus testSemaphores (Context& context)
 {
 	TestLog&					log					= context.getTestContext().getLog();
+	const PlatformInterface&	platformInterface	= context.getPlatformInterface();
 	const InstanceInterface&	instanceInterface	= context.getInstanceInterface();
 	const VkPhysicalDevice		physicalDevice		= context.getPhysicalDevice();
 	deUint32					queueFamilyIdx;
-	vk::Move<VkDevice>			device				= createTestDevice(instanceInterface, physicalDevice, &queueFamilyIdx);
-	const DeviceDriver			deviceInterface		(instanceInterface, *device);
+	vk::Move<VkDevice>			device				= createTestDevice(platformInterface, context.getInstance(), instanceInterface, physicalDevice, &queueFamilyIdx);
+	const DeviceDriver			deviceInterface		(platformInterface, context.getInstance(), *device);
 	SimpleAllocator				allocator			(deviceInterface,
 													 *device,
 													 getPhysicalDeviceMemoryProperties(instanceInterface, physicalDevice));

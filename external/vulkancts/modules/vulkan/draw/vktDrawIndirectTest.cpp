@@ -37,6 +37,7 @@
 #include "vkQueryUtil.hpp"
 
 #include "vkDefs.hpp"
+#include "vkCmdUtil.hpp"
 
 namespace vkt
 {
@@ -243,7 +244,7 @@ IndirectDraw::IndirectDraw (Context &context, TestSpec testSpec)
 	, m_drawType						(testSpec.drawType)
 	, m_testFirstInstanceNdx			(testSpec.testFirstInstanceNdx)
 {
-	if (m_testIndirectCountExt && !de::contains(context.getDeviceExtensions().begin(), context.getDeviceExtensions().end(), "VK_KHR_draw_indirect_count"))
+	if (m_testIndirectCountExt && !vk::isDeviceExtensionSupported(m_context.getUsedApiVersion(), m_context.getDeviceExtensions(), "VK_KHR_draw_indirect_count"))
 		TCU_THROW(NotSupportedError, "Missing extension: VK_KHR_draw_indirect_count");
 
 	if (m_testFirstInstanceNdx)
@@ -263,7 +264,7 @@ IndirectDraw::IndirectDraw (Context &context, TestSpec testSpec)
 		{
 			indices[i] = static_cast<deUint32>(i);
 		}
-		vk::flushMappedMemoryRange(m_vk, m_context.getDevice(), m_indexBuffer->getBoundMemory().getMemory(), m_indexBuffer->getBoundMemory().getOffset(), sizeof(deUint32) * indexBufferLength);
+		vk::flushMappedMemoryRange(m_vk, m_context.getDevice(), m_indexBuffer->getBoundMemory().getMemory(), m_indexBuffer->getBoundMemory().getOffset(), VK_WHOLE_SIZE);
 	}
 
 	// Check device for multidraw support:
@@ -301,8 +302,9 @@ void IndirectDraw::addCommand<vk::VkDrawIndexedIndirectCommand> (const vk::VkDra
 
 tcu::TestStatus IndirectDraw::iterate (void)
 {
-	tcu::TestLog &log = m_context.getTestContext().getLog();
-	const vk::VkQueue queue = m_context.getUniversalQueue();
+	tcu::TestLog&		log		= m_context.getTestContext().getLog();
+	const vk::VkQueue	queue	= m_context.getUniversalQueue();
+	const vk::VkDevice	device	= m_context.getDevice();
 
 	if (m_drawType == DRAW_TYPE_SEQUENTIAL)
 	{
@@ -469,7 +471,7 @@ tcu::TestStatus IndirectDraw::iterate (void)
 							   m_context.getDevice(),
 							   m_indirectBuffer->getBoundMemory().getMemory(),
 							   m_indirectBuffer->getBoundMemory().getOffset(),
-							   dataSize + m_offsetInBuffer);
+							   VK_WHOLE_SIZE);
 
 	if (m_testIndirectCountExt)
 	{
@@ -492,7 +494,7 @@ tcu::TestStatus IndirectDraw::iterate (void)
 								   m_context.getDevice(),
 								   m_indirectCountBuffer->getBoundMemory().getMemory(),
 								   m_indirectCountBuffer->getBoundMemory().getOffset(),
-								   m_offsetInCountBuffer + sizeof(m_drawCount));
+								   VK_WHOLE_SIZE);
 	}
 
 	m_vk.cmdBindPipeline(*m_cmdBuffer, vk::VK_PIPELINE_BIND_POINT_GRAPHICS, *m_pipeline);
@@ -561,24 +563,10 @@ tcu::TestStatus IndirectDraw::iterate (void)
 			}
 		}
 	}
-	m_vk.cmdEndRenderPass(*m_cmdBuffer);
-	m_vk.endCommandBuffer(*m_cmdBuffer);
+	endRenderPass(m_vk, *m_cmdBuffer);
+	endCommandBuffer(m_vk, *m_cmdBuffer);
 
-	vk::VkSubmitInfo submitInfo =
-	{
-		vk::VK_STRUCTURE_TYPE_SUBMIT_INFO,	// VkStructureType			sType;
-		DE_NULL,							// const void*				pNext;
-		0,										// deUint32					waitSemaphoreCount;
-		DE_NULL,								// const VkSemaphore*		pWaitSemaphores;
-		(const vk::VkPipelineStageFlags*)DE_NULL,
-		1,										// deUint32					commandBufferCount;
-		&m_cmdBuffer.get(),					// const VkCommandBuffer*	pCommandBuffers;
-		0,										// deUint32					signalSemaphoreCount;
-		DE_NULL								// const VkSemaphore*		pSignalSemaphores;
-	};
-	VK_CHECK(m_vk.queueSubmit(queue, 1, &submitInfo, DE_NULL));
-
-	VK_CHECK(m_vk.queueWaitIdle(queue));
+	submitCommandsAndWait(m_vk, device, queue, m_cmdBuffer.get());
 
 	// Validation
 	tcu::Texture2D referenceFrame(vk::mapVkFormat(m_colorAttachmentFormat), (int)(0.5 + WIDTH), (int)(0.5 + HEIGHT));
@@ -635,8 +623,9 @@ IndirectDrawInstanced<FirstInstanceSupport>::IndirectDrawInstanced (Context &con
 template<class FirstInstanceSupport>
 tcu::TestStatus IndirectDrawInstanced<FirstInstanceSupport>::iterate (void)
 {
-	tcu::TestLog &log = m_context.getTestContext().getLog();
-	const vk::VkQueue queue = m_context.getUniversalQueue();
+	tcu::TestLog&		log		= m_context.getTestContext().getLog();
+	const vk::VkQueue	queue	= m_context.getUniversalQueue();
+	const vk::VkDevice	device	= m_context.getDevice();
 
 	if (m_drawType == DRAW_TYPE_SEQUENTIAL)
 	{
@@ -805,7 +794,7 @@ tcu::TestStatus IndirectDrawInstanced<FirstInstanceSupport>::iterate (void)
 							   m_context.getDevice(),
 							   m_indirectBuffer->getBoundMemory().getMemory(),
 							   m_indirectBuffer->getBoundMemory().getOffset(),
-							   dataSize + m_offsetInBuffer);
+							   VK_WHOLE_SIZE);
 
 	if (m_testIndirectCountExt)
 	{
@@ -828,7 +817,7 @@ tcu::TestStatus IndirectDrawInstanced<FirstInstanceSupport>::iterate (void)
 								   m_context.getDevice(),
 								   m_indirectCountBuffer->getBoundMemory().getMemory(),
 								   m_indirectCountBuffer->getBoundMemory().getOffset(),
-								   m_offsetInCountBuffer + sizeof(m_drawCount));
+								   VK_WHOLE_SIZE);
 	}
 
 	m_vk.cmdBindPipeline(*m_cmdBuffer, vk::VK_PIPELINE_BIND_POINT_GRAPHICS, *m_pipeline);
@@ -897,24 +886,10 @@ tcu::TestStatus IndirectDrawInstanced<FirstInstanceSupport>::iterate (void)
 			}
 		}
 	}
-	m_vk.cmdEndRenderPass(*m_cmdBuffer);
-	m_vk.endCommandBuffer(*m_cmdBuffer);
+	endRenderPass(m_vk, *m_cmdBuffer);
+	endCommandBuffer(m_vk, *m_cmdBuffer);
 
-	vk::VkSubmitInfo submitInfo =
-	{
-		vk::VK_STRUCTURE_TYPE_SUBMIT_INFO,	// VkStructureType			sType;
-		DE_NULL,							// const void*				pNext;
-		0,										// deUint32					waitSemaphoreCount;
-		DE_NULL,								// const VkSemaphore*		pWaitSemaphores;
-		(const vk::VkPipelineStageFlags*)DE_NULL,
-		1,										// deUint32					commandBufferCount;
-		&m_cmdBuffer.get(),					// const VkCommandBuffer*	pCommandBuffers;
-		0,										// deUint32					signalSemaphoreCount;
-		DE_NULL								// const VkSemaphore*		pSignalSemaphores;
-	};
-	VK_CHECK(m_vk.queueSubmit(queue, 1, &submitInfo, DE_NULL));
-
-	VK_CHECK(m_vk.queueWaitIdle(queue));
+	submitCommandsAndWait(m_vk, device, queue, m_cmdBuffer.get());
 
 	// Validation
 	VK_CHECK(m_vk.queueWaitIdle(queue));

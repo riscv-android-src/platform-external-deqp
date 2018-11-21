@@ -33,6 +33,8 @@
 #include "vkBuilderUtil.hpp"
 #include "vkImageUtil.hpp"
 #include "vkTypeUtil.hpp"
+#include "vkCmdUtil.hpp"
+#include "vkObjUtil.hpp"
 
 #include "deUniquePtr.hpp"
 #include "deStringUtil.hpp"
@@ -502,11 +504,8 @@ tcu::TestStatus test (Context& context, const CaseDefinition caseDef)
 
 	// Begin render pass
 	{
-		const VkRect2D renderArea = {
-			makeOffset2D(0, 0),
-			makeExtent2D(renderSize.x(), renderSize.y()),
-		};
-		const tcu::Vec4 clearColor = tcu::Vec4(0.0f, 0.0f, 0.0f, 1.0f);
+		const VkRect2D	renderArea	= makeRect2D(renderSize);
+		const tcu::Vec4	clearColor	= tcu::Vec4(0.0f, 0.0f, 0.0f, 1.0f);
 
 		beginRenderPass(vk, *cmdBuffer, *renderPass, *framebuffer, renderArea, clearColor);
 	}

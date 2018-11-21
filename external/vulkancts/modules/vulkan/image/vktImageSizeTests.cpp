@@ -35,6 +35,7 @@
 #include "vkMemUtil.hpp"
 #include "vkBuilderUtil.hpp"
 #include "vkImageUtil.hpp"
+#include "vkCmdUtil.hpp"
 
 #include "deUniquePtr.hpp"
 #include "deStringUtil.hpp"
@@ -109,7 +110,7 @@ inline VkImageCreateInfo makeImageCreateInfo (const Texture& texture, const VkFo
 //! Interpret the memory as IVec3
 inline tcu::IVec3 readIVec3 (const void* const data)
 {
-	const int* const p = reinterpret_cast<const int* const>(data);
+	const int* const p = reinterpret_cast<const int*>(data);
 	return tcu::IVec3(p[0], p[1], p[2]);
 }
 
