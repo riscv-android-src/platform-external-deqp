@@ -2026,8 +2026,9 @@ public class DeqpTestRunner implements IBuildReceiver, IDeviceTest,
             // Get the system into a known state.
             // FIXME -- b/115906203 -- Skia Vulkan workaround
             mDevice.executeShellCommand("setprop debug.hwui.renderer none");
-            // Force dEQP to use ANGLE
-            mDevice.executeShellCommand("settings put global angle_enabled_app none");
+            // Clear ANGLE Global.Settings values
+            mDevice.executeShellCommand("settings put global angle_gl_driver_selection_pkgs \"\"");
+			mDevice.executeShellCommand("settings put global angle_gl_driver_selection_values \"\"");
 
             // ANGLE
             if (mAngle.equals(ANGLE_VULKAN)) {
@@ -2035,15 +2036,19 @@ public class DeqpTestRunner implements IBuildReceiver, IDeviceTest,
                 // FIXME -- b/115906203 -- Skia Vulkan workaround
                 mDevice.executeShellCommand("setprop debug.hwui.renderer skiavk");
                 // Force dEQP to use ANGLE
-                mDevice.executeShellCommand("settings put global angle_enabled_app "
-                    + DEQP_ONDEVICE_PKG);
+                mDevice.executeShellCommand(
+                	"settings put global angle_gl_driver_selection_pkgs " + DEQP_ONDEVICE_PKG);
+				mDevice.executeShellCommand(
+					"settings put global angle_gl_driver_selection_values angle");
                 // Configure ANGLE to use Vulkan
                 mDevice.executeShellCommand("setprop debug.angle.backend 2");
             } else if (mAngle.equals(ANGLE_OPENGLES)) {
                 CLog.i("Configuring ANGLE to use: " + mAngle);
                 // Force dEQP to use ANGLE
-                mDevice.executeShellCommand("settings put global angle_enabled_app "
-                    + DEQP_ONDEVICE_PKG);
+				mDevice.executeShellCommand(
+					"settings put global angle_gl_driver_selection_pkgs " + DEQP_ONDEVICE_PKG);
+				mDevice.executeShellCommand(
+					"settings put global angle_gl_driver_selection_values angle");
                 // Configure ANGLE to use Vulkan
                 mDevice.executeShellCommand("setprop debug.angle.backend 0");
             }
@@ -2068,7 +2073,8 @@ public class DeqpTestRunner implements IBuildReceiver, IDeviceTest,
                     mDevice.executeShellCommand("setprop debug.hwui.renderer none");
                 }
                 // Stop forcing dEQP to use ANGLE
-                mDevice.executeShellCommand("settings put global angle_enabled_app none");
+				mDevice.executeShellCommand("settings put global angle_gl_driver_selection_pkgs \"\"");
+				mDevice.executeShellCommand("settings put global angle_gl_driver_selection_values \"\"");
             }
         } catch (DeviceNotAvailableException ex) {
             // chain forward
