@@ -17,9 +17,7 @@ include $(LOCAL_PATH)/AndroidGen.mk
 
 LOCAL_C_INCLUDES += \
 	frameworks/native/opengl/include \
-	external/libpng \
-	external/zlib \
-	external/shaderc/spirv-headers/include
+	external/deqp-deps/SPIRV-Headers/include \
 
 deqp_compile_flags := \
 	-DDEQP_SUPPORT_GLES1=1 \
@@ -27,6 +25,8 @@ deqp_compile_flags := \
 	-D_XOPEN_SOURCE=600 \
 	-DDEQP_TARGET_NAME=\"android\" \
 	-DQP_SUPPORT_PNG=1 \
+	-DDEQP_HAVE_GLSLANG=1 \
+	-DDEQP_HAVE_SPIRV_TOOLS=1 \
 	-Wall \
 	-Werror \
 	-Wconversion \
@@ -46,12 +46,25 @@ LOCAL_SHARED_LIBRARIES := \
 
 LOCAL_STATIC_LIBRARIES := \
 		libpng_ndk \
+		deqp_OSDependent \
+		deqp_OGLCompiler \
+		deqp_HLSL \
+		deqp_glslang \
+		deqp_SPIRV \
+		deqp_spirv-tools \
 
 LOCAL_CFLAGS += \
 	$(deqp_compile_flags)
 
 LOCAL_SDK_VERSION := 27
-LOCAL_CPPFLAGS += -Wno-non-virtual-dtor -Wno-delete-non-virtual-dtor
+LOCAL_CPPFLAGS += \
+		-Wno-non-virtual-dtor \
+		-Wno-delete-non-virtual-dtor \
+		-Wno-implicit-int-conversion \
+		-Wno-missing-field-initializers \
+		-Wno-switch \
+		-Wno-unused-variable \
+
 LOCAL_NDK_STL_VARIANT := c++_static
 LOCAL_RTTI_FLAG := -frtti -fexceptions
 LOCAL_MULTILIB := both
