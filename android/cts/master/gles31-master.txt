@@ -17718,7 +17718,6 @@ dEQP-GLES31.functional.separate_shader.random.63
 dEQP-GLES31.functional.separate_shader.random.64
 dEQP-GLES31.functional.separate_shader.random.65
 dEQP-GLES31.functional.separate_shader.random.66
-dEQP-GLES31.functional.separate_shader.random.67
 dEQP-GLES31.functional.separate_shader.random.68
 dEQP-GLES31.functional.separate_shader.random.69
 dEQP-GLES31.functional.separate_shader.random.70
