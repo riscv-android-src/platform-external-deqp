@@ -2028,7 +2028,7 @@ public class DeqpTestRunner implements IBuildReceiver, IDeviceTest,
             mDevice.executeShellCommand("setprop debug.hwui.renderer none");
             // Clear ANGLE Global.Settings values
             mDevice.executeShellCommand("settings put global angle_gl_driver_selection_pkgs \"\"");
-			mDevice.executeShellCommand("settings put global angle_gl_driver_selection_values \"\"");
+            mDevice.executeShellCommand("settings put global angle_gl_driver_selection_values \"\"");
 
             // ANGLE
             if (mAngle.equals(ANGLE_VULKAN)) {
@@ -2037,18 +2037,18 @@ public class DeqpTestRunner implements IBuildReceiver, IDeviceTest,
                 mDevice.executeShellCommand("setprop debug.hwui.renderer skiavk");
                 // Force dEQP to use ANGLE
                 mDevice.executeShellCommand(
-                	"settings put global angle_gl_driver_selection_pkgs " + DEQP_ONDEVICE_PKG);
-				mDevice.executeShellCommand(
-					"settings put global angle_gl_driver_selection_values angle");
+                    "settings put global angle_gl_driver_selection_pkgs " + DEQP_ONDEVICE_PKG);
+                mDevice.executeShellCommand(
+                    "settings put global angle_gl_driver_selection_values angle");
                 // Configure ANGLE to use Vulkan
                 mDevice.executeShellCommand("setprop debug.angle.backend 2");
             } else if (mAngle.equals(ANGLE_OPENGLES)) {
                 CLog.i("Configuring ANGLE to use: " + mAngle);
                 // Force dEQP to use ANGLE
-				mDevice.executeShellCommand(
-					"settings put global angle_gl_driver_selection_pkgs " + DEQP_ONDEVICE_PKG);
-				mDevice.executeShellCommand(
-					"settings put global angle_gl_driver_selection_values angle");
+                mDevice.executeShellCommand(
+                    "settings put global angle_gl_driver_selection_pkgs " + DEQP_ONDEVICE_PKG);
+                mDevice.executeShellCommand(
+                    "settings put global angle_gl_driver_selection_values angle");
                 // Configure ANGLE to use Vulkan
                 mDevice.executeShellCommand("setprop debug.angle.backend 0");
             }
@@ -2073,8 +2073,8 @@ public class DeqpTestRunner implements IBuildReceiver, IDeviceTest,
                     mDevice.executeShellCommand("setprop debug.hwui.renderer none");
                 }
                 // Stop forcing dEQP to use ANGLE
-				mDevice.executeShellCommand("settings put global angle_gl_driver_selection_pkgs \"\"");
-				mDevice.executeShellCommand("settings put global angle_gl_driver_selection_values \"\"");
+                mDevice.executeShellCommand("settings put global angle_gl_driver_selection_pkgs \"\"");
+                mDevice.executeShellCommand("settings put global angle_gl_driver_selection_values \"\"");
             }
         } catch (DeviceNotAvailableException ex) {
             // chain forward
