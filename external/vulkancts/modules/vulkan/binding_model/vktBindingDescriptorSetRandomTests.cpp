@@ -241,6 +241,13 @@ void DescriptorSetRandomTestCase::checkSupport(Context& context) const
 		TCU_THROW(NotSupportedError, "Number of descriptor sets not supported");
 	}
 
+	if ((m_data.maxPerStageUniformBuffers + m_data.maxPerStageStorageBuffers +
+		m_data.maxPerStageSampledImages + m_data.maxPerStageStorageImages) >
+		properties.properties.limits.maxPerStageResources)
+	{
+		TCU_THROW(NotSupportedError, "Number of descriptors not supported");
+	}
+
 	if (m_data.maxPerStageUniformBuffers > properties.properties.limits.maxPerStageDescriptorUniformBuffers ||
 		m_data.maxPerStageStorageBuffers > properties.properties.limits.maxPerStageDescriptorStorageBuffers ||
 		m_data.maxUniformBuffersDynamic  > properties.properties.limits.maxDescriptorSetUniformBuffersDynamic ||
@@ -989,7 +996,7 @@ tcu::TestStatus DescriptorSetRandomTestInstance::iterate (void)
 						DE_NULL,
 						(vk::VkBufferViewCreateFlags)0,
 						**buffer,								// buffer
-						VK_FORMAT_R32_UINT,						// format
+						VK_FORMAT_R32_SINT,						// format
 						(vk::VkDeviceSize)align*d,				// offset
 						(vk::VkDeviceSize)sizeof(deUint32)		// range
 					};

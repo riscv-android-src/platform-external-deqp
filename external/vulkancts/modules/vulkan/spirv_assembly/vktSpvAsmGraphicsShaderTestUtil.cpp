@@ -49,6 +49,7 @@ using std::string;
 using std::vector;
 using tcu::Float16;
 using tcu::Float32;
+using tcu::Float64;
 using tcu::IVec3;
 using tcu::IVec4;
 using tcu::RGBA;
@@ -64,7 +65,10 @@ deUint32 IFDataType::getElementNumBytes (void) const
 	if (elementType < NUMBERTYPE_END32)
 		return 4;
 
-	return 2;
+	if (elementType < NUMBERTYPE_END16)
+		return 2;
+
+	return 8;
 }
 
 VkFormat IFDataType::getVkFormat (void) const
@@ -73,6 +77,7 @@ VkFormat IFDataType::getVkFormat (void) const
 	{
 		switch (elementType)
 		{
+			case NUMBERTYPE_FLOAT64:	return VK_FORMAT_R64_SFLOAT;
 			case NUMBERTYPE_FLOAT32:	return VK_FORMAT_R32_SFLOAT;
 			case NUMBERTYPE_INT32:		return VK_FORMAT_R32_SINT;
 			case NUMBERTYPE_UINT32:		return VK_FORMAT_R32_UINT;
@@ -86,6 +91,7 @@ VkFormat IFDataType::getVkFormat (void) const
 	{
 		switch (elementType)
 		{
+			case NUMBERTYPE_FLOAT64:	return VK_FORMAT_R64G64_SFLOAT;
 			case NUMBERTYPE_FLOAT32:	return VK_FORMAT_R32G32_SFLOAT;
 			case NUMBERTYPE_INT32:		return VK_FORMAT_R32G32_SINT;
 			case NUMBERTYPE_UINT32:		return VK_FORMAT_R32G32_UINT;
@@ -99,6 +105,7 @@ VkFormat IFDataType::getVkFormat (void) const
 	{
 		switch (elementType)
 		{
+			case NUMBERTYPE_FLOAT64:	return VK_FORMAT_R64G64B64_SFLOAT;
 			case NUMBERTYPE_FLOAT32:	return VK_FORMAT_R32G32B32_SFLOAT;
 			case NUMBERTYPE_INT32:		return VK_FORMAT_R32G32B32_SINT;
 			case NUMBERTYPE_UINT32:		return VK_FORMAT_R32G32B32_UINT;
@@ -112,6 +119,7 @@ VkFormat IFDataType::getVkFormat (void) const
 	{
 		switch (elementType)
 		{
+			case NUMBERTYPE_FLOAT64:	return VK_FORMAT_R64G64B64A64_SFLOAT;
 			case NUMBERTYPE_FLOAT32:	return VK_FORMAT_R32G32B32A32_SFLOAT;
 			case NUMBERTYPE_INT32:		return VK_FORMAT_R32G32B32A32_SINT;
 			case NUMBERTYPE_UINT32:		return VK_FORMAT_R32G32B32A32_UINT;
@@ -133,6 +141,7 @@ tcu::TextureFormat IFDataType::getTextureFormat (void) const
 
 	switch (elementType)
 	{
+		case NUMBERTYPE_FLOAT64:	ct = tcu::TextureFormat::FLOAT64;			break;
 		case NUMBERTYPE_FLOAT32:	ct = tcu::TextureFormat::FLOAT;				break;
 		case NUMBERTYPE_INT32:		ct = tcu::TextureFormat::SIGNED_INT32;		break;
 		case NUMBERTYPE_UINT32:		ct = tcu::TextureFormat::UNSIGNED_INT32;	break;
@@ -160,6 +169,7 @@ string IFDataType::str (void) const
 
 	switch (elementType)
 	{
+		case NUMBERTYPE_FLOAT64:	ret = "f64"; break;
 		case NUMBERTYPE_FLOAT32:	ret = "f32"; break;
 		case NUMBERTYPE_INT32:		ret = "i32"; break;
 		case NUMBERTYPE_UINT32:		ret = "u32"; break;
@@ -266,6 +276,7 @@ InstanceContext::InstanceContext (const RGBA						(&inputs)[4],
 	, interfaces					(interfaces_)
 	, failResult					(QP_TEST_RESULT_FAIL)
 	, failMessageTemplate			("${reason}")
+	, renderFullSquare				(false)
 {
 	inputColors[0]		= inputs[0];
 	inputColors[1]		= inputs[1];
@@ -293,6 +304,7 @@ InstanceContext::InstanceContext (const InstanceContext& other)
 	, interfaces					(other.interfaces)
 	, failResult					(other.failResult)
 	, failMessageTemplate			(other.failMessageTemplate)
+	, renderFullSquare				(other.renderFullSquare)
 {
 	inputColors[0]		= other.inputColors[0];
 	inputColors[1]		= other.inputColors[1];
@@ -374,89 +386,6 @@ void createPipelineShaderStages (const DeviceInterface&						vk,
 		}
 	}
 }
-
-#define SPIRV_ASSEMBLY_TYPES																	\
-	"%void = OpTypeVoid\n"																		\
-	"%bool = OpTypeBool\n"																		\
-																								\
-	"%i32 = OpTypeInt 32 1\n"																	\
-	"%u32 = OpTypeInt 32 0\n"																	\
-																								\
-	"%f32 = OpTypeFloat 32\n"																	\
-	"%v2i32 = OpTypeVector %i32 2\n"															\
-	"%v2u32 = OpTypeVector %u32 2\n"															\
-	"%v2f32 = OpTypeVector %f32 2\n"															\
-	"%v3i32 = OpTypeVector %i32 3\n"															\
-	"%v3u32 = OpTypeVector %u32 3\n"															\
-	"%v3f32 = OpTypeVector %f32 3\n"															\
-	"%v4i32 = OpTypeVector %i32 4\n"															\
-	"%v4u32 = OpTypeVector %u32 4\n"															\
-	"%v4f32 = OpTypeVector %f32 4\n"															\
-	"%v4bool = OpTypeVector %bool 4\n"															\
-																								\
-	"%v4f32_v4f32_function = OpTypeFunction %v4f32 %v4f32\n"									\
-	"%bool_function = OpTypeFunction %bool\n"													\
-	"%fun = OpTypeFunction %void\n"																\
-																								\
-	"%ip_f32 = OpTypePointer Input %f32\n"														\
-	"%ip_i32 = OpTypePointer Input %i32\n"														\
-	"%ip_u32 = OpTypePointer Input %u32\n"														\
-	"%ip_v3f32 = OpTypePointer Input %v3f32\n"													\
-	"%ip_v2f32 = OpTypePointer Input %v2f32\n"													\
-	"%ip_v2i32 = OpTypePointer Input %v2i32\n"													\
-	"%ip_v2u32 = OpTypePointer Input %v2u32\n"													\
-	"%ip_v4f32 = OpTypePointer Input %v4f32\n"													\
-	"%ip_v4i32 = OpTypePointer Input %v4i32\n"													\
-	"%ip_v4u32 = OpTypePointer Input %v4u32\n"													\
-																								\
-	"%op_f32 = OpTypePointer Output %f32\n"														\
-	"%op_i32 = OpTypePointer Output %i32\n"														\
-	"%op_u32 = OpTypePointer Output %u32\n"														\
-	"%op_v2f32 = OpTypePointer Output %v2f32\n"													\
-	"%op_v2i32 = OpTypePointer Output %v2i32\n"													\
-	"%op_v2u32 = OpTypePointer Output %v2u32\n"													\
-	"%op_v4f32 = OpTypePointer Output %v4f32\n"													\
-	"%op_v4i32 = OpTypePointer Output %v4i32\n"													\
-	"%op_v4u32 = OpTypePointer Output %v4u32\n"													\
-																								\
-	"%fp_f32   = OpTypePointer Function %f32\n"													\
-	"%fp_i32   = OpTypePointer Function %i32\n"													\
-	"%fp_v4f32 = OpTypePointer Function %v4f32\n"
-
-#define SPIRV_ASSEMBLY_CONSTANTS																\
-	"%c_f32_1 = OpConstant %f32 1.0\n"															\
-	"%c_f32_0 = OpConstant %f32 0.0\n"															\
-	"%c_f32_0_5 = OpConstant %f32 0.5\n"														\
-	"%c_f32_n1  = OpConstant %f32 -1.\n"														\
-	"%c_f32_7 = OpConstant %f32 7.0\n"															\
-	"%c_f32_8 = OpConstant %f32 8.0\n"															\
-	"%c_i32_0 = OpConstant %i32 0\n"															\
-	"%c_i32_1 = OpConstant %i32 1\n"															\
-	"%c_i32_2 = OpConstant %i32 2\n"															\
-	"%c_i32_3 = OpConstant %i32 3\n"															\
-	"%c_i32_4 = OpConstant %i32 4\n"															\
-	"%c_u32_0 = OpConstant %u32 0\n"															\
-	"%c_u32_1 = OpConstant %u32 1\n"															\
-	"%c_u32_2 = OpConstant %u32 2\n"															\
-	"%c_u32_3 = OpConstant %u32 3\n"															\
-	"%c_u32_32 = OpConstant %u32 32\n"															\
-	"%c_u32_4 = OpConstant %u32 4\n"															\
-	"%c_u32_31_bits = OpConstant %u32 0x7FFFFFFF\n"												\
-	"%c_v4f32_1_1_1_1 = OpConstantComposite %v4f32 %c_f32_1 %c_f32_1 %c_f32_1 %c_f32_1\n"		\
-	"%c_v4f32_1_0_0_1 = OpConstantComposite %v4f32 %c_f32_1 %c_f32_0 %c_f32_0 %c_f32_1\n"		\
-	"%c_v4f32_0_5_0_5_0_5_0_5 = OpConstantComposite %v4f32 %c_f32_0_5 %c_f32_0_5 %c_f32_0_5 %c_f32_0_5\n"
-
-#define SPIRV_ASSEMBLY_ARRAYS																	\
-	"%a1f32 = OpTypeArray %f32 %c_u32_1\n"														\
-	"%a2f32 = OpTypeArray %f32 %c_u32_2\n"														\
-	"%a3v4f32 = OpTypeArray %v4f32 %c_u32_3\n"													\
-	"%a4f32 = OpTypeArray %f32 %c_u32_4\n"														\
-	"%a32v4f32 = OpTypeArray %v4f32 %c_u32_32\n"												\
-	"%ip_a3v4f32 = OpTypePointer Input %a3v4f32\n"												\
-	"%ip_a32v4f32 = OpTypePointer Input %a32v4f32\n"											\
-	"%op_a2f32 = OpTypePointer Output %a2f32\n"													\
-	"%op_a3v4f32 = OpTypePointer Output %a3v4f32\n"												\
-	"%op_a4f32 = OpTypePointer Output %a4f32\n"
 
 // Creates vertex-shader assembly by specializing a boilerplate StringTemplate
 // on fragments, which must (at least) map "testfun" to an OpFunction definition
@@ -716,7 +645,7 @@ string makeTessEvalShaderAssembly (const map<string, string>& fragments)
 		"%BP_op_gl_PerVertexOut = OpTypePointer Output %BP_gl_PerVertexOut\n"
 		"%BP_stream = OpVariable %BP_op_gl_PerVertexOut Output\n"
 		"%BP_gl_TessCoord = OpVariable %ip_v3f32 Input\n"
-		"%BP_gl_PrimitiveID = OpVariable %op_i32 Input\n"
+		"%BP_gl_PrimitiveID = OpVariable %ip_i32 Input\n"
 		"%BP_gl_PerVertexIn = OpTypeStruct %v4f32 %f32 %a1f32 %a1f32\n"
 		"%BP_a32_gl_PerVertexIn = OpTypeArray %BP_gl_PerVertexIn %c_u32_32\n"
 		"%BP_ip_a32_gl_PerVertexIn = OpTypePointer Input %BP_a32_gl_PerVertexIn\n"
@@ -1022,21 +951,33 @@ map<string, string> passthruInterface (const IFDataType& data_type)
 
 	if (!data_type.elementIs32bit())
 	{
-		if (data_type.elementType == NUMBERTYPE_FLOAT16)
+		if (data_type.elementType == NUMBERTYPE_FLOAT64)
 		{
+			fragments["capability"]		= "OpCapability Float64\n\n";
+			fragments["pre_main"]	+= "%f64 = OpTypeFloat 64\n";
+		}
+		else if (data_type.elementType == NUMBERTYPE_FLOAT16)
+		{
+			fragments["capability"]		= "OpCapability StorageInputOutput16\n";
+			fragments["extension"]		= "OpExtension \"SPV_KHR_16bit_storage\"\n";
 			fragments["pre_main"]	+= "%f16 = OpTypeFloat 16\n";
 		}
 		else if (data_type.elementType == NUMBERTYPE_INT16)
 		{
+			fragments["capability"]		= "OpCapability StorageInputOutput16\n";
+			fragments["extension"]		= "OpExtension \"SPV_KHR_16bit_storage\"\n";
 			fragments["pre_main"]	+= "%i16 = OpTypeInt 16 1\n";
+		}
+		else if (data_type.elementType == NUMBERTYPE_UINT16)
+		{
+			fragments["capability"]		= "OpCapability StorageInputOutput16\n";
+			fragments["extension"]		= "OpExtension \"SPV_KHR_16bit_storage\"\n";
+			fragments["pre_main"]	+= "%u16 = OpTypeInt 16 0\n";
 		}
 		else
 		{
-			fragments["pre_main"]	+= "%u16 = OpTypeInt 16 0\n";
+			DE_ASSERT(0 && "unhandled type");
 		}
-
-		fragments["capability"]		= "OpCapability StorageInputOutput16\n";
-		fragments["extension"]		= "OpExtension \"SPV_KHR_16bit_storage\"\n";
 
 		if (data_type.isVector())
 		{
@@ -2165,6 +2106,126 @@ bool compare16BitFloat(deUint16 original, float returned, tcu::TestLog & log)
 	return false;
 }
 
+bool compare16BitFloat (deFloat16 original, deFloat16 returned, std::string& error)
+{
+	std::ostringstream	log;
+	const Float16		originalFloat	(original);
+	const Float16		returnedFloat	(returned);
+
+	if (originalFloat.isZero())
+	{
+		if (returnedFloat.isZero())
+			return true;
+
+		log << "Error: expected zero but returned " << std::hex << "0x" << returned << " (" << returnedFloat.asFloat() << ")";
+		error = log.str();
+		return false;
+	}
+
+	// Any denormalized value input into a shader may be flushed to 0.
+	if (originalFloat.isDenorm() && returnedFloat.isZero())
+		return true;
+
+	// Inf are always turned into Inf with the same sign, too.
+	if (originalFloat.isInf())
+	{
+		if (returnedFloat.isInf() && originalFloat.signBit() == returnedFloat.signBit())
+			return true;
+
+		log << "Error: expected Inf but returned " << std::hex << "0x" << returned << " (" << returnedFloat.asFloat() << ")";
+		error = log.str();
+		return false;
+	}
+
+	// NaN are always turned into NaN, too.
+	if (originalFloat.isNaN())
+	{
+		if (returnedFloat.isNaN())
+			return true;
+
+		log << "Error: expected NaN but returned " << std::hex << "0x" << returned << " (" << returnedFloat.asFloat() << ")";
+		error = log.str();
+		return false;
+	}
+
+	// Any denormalized value potentially generated by any instruction in a shader may be flushed to 0.
+	if (originalFloat.isDenorm() && returnedFloat.isZero())
+		return true;
+
+	// If not matched in the above cases, they should have the same bit pattern.
+	if (originalFloat.bits() == returnedFloat.bits())
+		return true;
+
+	log << "Error: found unmatched 16-bit and 16-bit floats: 0x"
+		<< std::hex << original << " <=> 0x" << returned
+		<< " (" << originalFloat.asFloat() << " <=> " << returnedFloat.asFloat() << ")";
+	error = log.str();
+	return false;
+}
+
+bool compare16BitFloat64 (double original, deUint16 returned, RoundingModeFlags flags, tcu::TestLog& log)
+{
+	// We only support RTE, RTZ, or both.
+	DE_ASSERT(static_cast<int>(flags) > 0 && static_cast<int>(flags) < 4);
+
+	const Float64	originalFloat	(original);
+	const Float16	returnedFloat	(returned);
+
+	// Zero are turned into zero under both RTE and RTZ.
+	if (originalFloat.isZero())
+	{
+		if (returnedFloat.isZero())
+			return true;
+
+		log << TestLog::Message << "Error: expected zero but returned " << returned << TestLog::EndMessage;
+		return false;
+	}
+
+	// Any denormalized value input into a shader may be flushed to 0.
+	if (originalFloat.isDenorm() && returnedFloat.isZero())
+		return true;
+
+	// Inf are always turned into Inf with the same sign, too.
+	if (originalFloat.isInf())
+	{
+		if (returnedFloat.isInf() && originalFloat.signBit() == returnedFloat.signBit())
+			return true;
+
+		log << TestLog::Message << "Error: expected Inf but returned " << returned << TestLog::EndMessage;
+		return false;
+	}
+
+	// NaN are always turned into NaN, too.
+	if (originalFloat.isNaN())
+	{
+		if (returnedFloat.isNaN())
+			return true;
+
+		log << TestLog::Message << "Error: expected NaN but returned " << returned << TestLog::EndMessage;
+		return false;
+	}
+
+	// Check all rounding modes
+	for (int bitNdx = 0; bitNdx < 2; ++bitNdx)
+	{
+		if ((flags & (1u << bitNdx)) == 0)
+			continue;	// This rounding mode is not selected.
+
+		const Float16	expectedFloat	(deFloat64To16Round(original, deRoundingMode(bitNdx)));
+
+		// Any denormalized value potentially generated by any instruction in a shader may be flushed to 0.
+		if (expectedFloat.isDenorm() && returnedFloat.isZero())
+			return true;
+
+		// If not matched in the above cases, they should have the same bit pattern.
+		if (expectedFloat.bits() == returnedFloat.bits())
+			return true;
+	}
+
+	log << TestLog::Message << "Error: found unmatched 64-bit and 16-bit floats: " << originalFloat.bits() << " vs " << returned << TestLog::EndMessage;
+	return false;
+}
+
 bool compare32BitFloat (float expected, float returned, tcu::TestLog& log)
 {
 	const Float32	expectedFloat	(expected);
@@ -2198,10 +2259,45 @@ bool compare32BitFloat (float expected, float returned, tcu::TestLog& log)
 	return false;
 }
 
+bool compare64BitFloat (double expected, double returned, tcu::TestLog& log)
+{
+	const Float64	expectedDouble	(expected);
+	const Float64	returnedDouble	(returned);
+
+	// Any denormalized value potentially generated by any instruction in a shader may be flushed to 0.
+	if (expectedDouble.isDenorm() && returnedDouble.isZero())
+		return true;
+
+	{
+		const Float16	originalDouble	(deFloat64To16(expected));
+
+		// Any denormalized value input into a shader may be flushed to 0.
+		if (originalDouble.isDenorm() && returnedDouble.isZero())
+			return true;
+	}
+
+	if (expectedDouble.isNaN())
+	{
+		if (returnedDouble.isNaN())
+			return true;
+
+		log << TestLog::Message << "Error: expected NaN but returned " << returned << TestLog::EndMessage;
+		return false;
+	}
+
+	if (returned == expected)
+		return true;
+
+	log << TestLog::Message << "Error: found unmatched 64-bit float: expected " << expectedDouble.bits() << " vs. returned " << returnedDouble.bits() << TestLog::EndMessage;
+	return false;
+}
+
 Move<VkBuffer> createBufferForResource (const DeviceInterface& vk, const VkDevice vkDevice, const Resource& resource, deUint32 queueFamilyIndex)
 {
+	const vk::VkDescriptorType resourceType = resource.getDescriptorType();
+
 	vector<deUint8>	resourceBytes;
-	resource.second->getBytes(resourceBytes);
+	resource.getBytes(resourceBytes);
 
 	const VkBufferCreateInfo	resourceBufferParams	=
 	{
@@ -2209,7 +2305,7 @@ Move<VkBuffer> createBufferForResource (const DeviceInterface& vk, const VkDevic
 		DE_NULL,															// pNext
 		(VkBufferCreateFlags)0,												// flags
 		(VkDeviceSize)resourceBytes.size(),									// size
-		(VkBufferUsageFlags)getMatchingBufferUsageFlagBit(resource.first),	// usage
+		(VkBufferUsageFlags)getMatchingBufferUsageFlagBit(resourceType),	// usage
 		VK_SHARING_MODE_EXCLUSIVE,											// sharingMode
 		1u,																	// queueFamilyCount
 		&queueFamilyIndex,													// pQueueFamilyIndices
@@ -2232,7 +2328,7 @@ Move<VkImage> createImageForResource (const DeviceInterface& vk, const VkDevice 
 		1u,																	//	deUint32			arraySize;
 		VK_SAMPLE_COUNT_1_BIT,												//	deUint32			samples;
 		VK_IMAGE_TILING_OPTIMAL,											//	VkImageTiling		tiling;
-		getMatchingImageUsageFlags(resource.first),							//	VkImageUsageFlags	usage;
+		getMatchingImageUsageFlags(resource.getDescriptorType()),			//	VkImageUsageFlags	usage;
 		VK_SHARING_MODE_EXCLUSIVE,											//	VkSharingMode		sharingMode;
 		1u,																	//	deUint32			queueFamilyCount;
 		&queueFamilyIndex,													//	const deUint32*		pQueueFamilyIndices;
@@ -2356,6 +2452,7 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 	const deUint32								numResources			= static_cast<deUint32>(instance.resources.inputs.size() + instance.resources.outputs.size());
 	const bool									needInterface			= !instance.interfaces.empty();
 	const VkPhysicalDeviceFeatures&				features				= context.getDeviceFeatures();
+	const Vec4									defaulClearColor		(0.125f, 0.25f, 0.75f, 1.0f);
 
 	supportsGeometry		= features.geometryShader == VK_TRUE;
 	supportsTessellation	= features.tessellationShader == VK_TRUE;
@@ -2412,41 +2509,64 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 		}
 	}
 
-	// 8bit storage features
+	// Core features
 	{
-		if (!is8BitStorageFeaturesSupported(context, instance.requestedFeatures.ext8BitStorage))
-			TCU_THROW(NotSupportedError, "Requested 8bit storage features not supported");
+		const VkShaderStageFlags		vertexPipelineStoresAndAtomicsAffected	= vk::VK_SHADER_STAGE_VERTEX_BIT
+																				| vk::VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+																				| vk::VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT
+																				| vk::VK_SHADER_STAGE_GEOMETRY_BIT;
+		const char*						unsupportedFeature						= DE_NULL;
+		vk::VkPhysicalDeviceFeatures	localRequiredCoreFeatures				= instance.requestedFeatures.coreFeatures;
+
+		// reset fragment stores and atomics feature requirement
+		if ((localRequiredCoreFeatures.fragmentStoresAndAtomics != DE_FALSE) &&
+			(instance.customizedStages & vk::VK_SHADER_STAGE_FRAGMENT_BIT) == 0)
+		{
+			localRequiredCoreFeatures.fragmentStoresAndAtomics = DE_FALSE;
+		}
+
+		// reset vertex pipeline stores and atomics feature requirement
+		if (localRequiredCoreFeatures.vertexPipelineStoresAndAtomics != DE_FALSE &&
+			(instance.customizedStages & vertexPipelineStoresAndAtomicsAffected) == 0)
+		{
+			localRequiredCoreFeatures.vertexPipelineStoresAndAtomics = DE_FALSE;
+		}
+
+		if (!isCoreFeaturesSupported(context, localRequiredCoreFeatures, &unsupportedFeature))
+			TCU_THROW(NotSupportedError, std::string("At least following requested core feature is not supported: ") + unsupportedFeature);
 	}
 
-	// 16bit storage features
+	// Extension features
 	{
-		if (!is16BitStorageFeaturesSupported(context, instance.requestedFeatures.ext16BitStorage))
-			TCU_THROW(NotSupportedError, "Requested 16bit storage features not supported");
+		// 8bit storage features
+		{
+			if (!is8BitStorageFeaturesSupported(context, instance.requestedFeatures.ext8BitStorage))
+				TCU_THROW(NotSupportedError, "Requested 8bit storage features not supported");
+		}
+
+		// 16bit storage features
+		{
+			if (!is16BitStorageFeaturesSupported(context, instance.requestedFeatures.ext16BitStorage))
+				TCU_THROW(NotSupportedError, "Requested 16bit storage features not supported");
+		}
+
+		// Variable Pointers features
+		{
+			if (!isVariablePointersFeaturesSupported(context, instance.requestedFeatures.extVariablePointers))
+				TCU_THROW(NotSupportedError, "Requested Variable Pointer features not supported");
+		}
+
+		// Float16/Int8 shader features
+		{
+			if (!isFloat16Int8FeaturesSupported(context, instance.requestedFeatures.extFloat16Int8))
+				TCU_THROW(NotSupportedError, "Requested 16bit float or 8bit int feature not supported");
+		}
 	}
 
-	// fragment stores and atomics feature
+	// FloatControls features
 	{
-		if (features.fragmentStoresAndAtomics == DE_FALSE &&
-			instance.requestedFeatures.coreFeatures.fragmentStoresAndAtomics == DE_TRUE &&
-			instance.customizedStages & vk::VK_SHADER_STAGE_FRAGMENT_BIT)
-			TCU_THROW(NotSupportedError, "Requested fragmentStoresAndAtomics feature not supported");
-	}
-
-	// vertex pipeline stores and atomics feature
-	{
-		if (features.vertexPipelineStoresAndAtomics == DE_FALSE &&
-			instance.requestedFeatures.coreFeatures.vertexPipelineStoresAndAtomics == DE_TRUE &&
-			(instance.customizedStages & vk::VK_SHADER_STAGE_VERTEX_BIT ||
-			 instance.customizedStages & vk::VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT ||
-			 instance.customizedStages & vk::VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT ||
-			 instance.customizedStages & vk::VK_SHADER_STAGE_GEOMETRY_BIT))
-			TCU_THROW(NotSupportedError, "Requested vertexPipelineStoresAndAtomics feature not supported");
-	}
-
-	// Variable Pointers features
-	{
-		if (!isVariablePointersFeaturesSupported(context, instance.requestedFeatures.extVariablePointers))
-			TCU_THROW(NotSupportedError, "Requested Variable Pointer features not supported");
+		if (!isFloatControlsFeaturesSupported(context, instance.requestedFeatures.floatControlsProperties))
+			TCU_THROW(NotSupportedError, "Requested Float Controls features not supported");
 	}
 
 	de::Random(seed).shuffle(instance.inputColors, instance.inputColors+4);
@@ -2454,27 +2574,60 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 	const Vec4								vertexData[]			=
 	{
 		// Upper left corner:
-		Vec4(-1.0f, -1.0f, 0.0f, 1.0f), instance.inputColors[0].toVec(),
-		Vec4(-0.5f, -1.0f, 0.0f, 1.0f), instance.inputColors[0].toVec(),
-		Vec4(-1.0f, -0.5f, 0.0f, 1.0f), instance.inputColors[0].toVec(),
+		Vec4(-1.0f, -1.0f, 0.0f, 1.0f), instance.inputColors[0].toVec(),	//1
+		Vec4(-0.5f, -1.0f, 0.0f, 1.0f), instance.inputColors[0].toVec(),	//2
+		Vec4(-1.0f, -0.5f, 0.0f, 1.0f), instance.inputColors[0].toVec(),	//3
 
 		// Upper right corner:
-		Vec4(+0.5f, -1.0f, 0.0f, 1.0f), instance.inputColors[1].toVec(),
-		Vec4(+1.0f, -1.0f, 0.0f, 1.0f), instance.inputColors[1].toVec(),
-		Vec4(+1.0f, -0.5f, 0.0f, 1.0f), instance.inputColors[1].toVec(),
+		Vec4(+0.5f, -1.0f, 0.0f, 1.0f), instance.inputColors[1].toVec(),	//4
+		Vec4(+1.0f, -1.0f, 0.0f, 1.0f), instance.inputColors[1].toVec(),	//5
+		Vec4(+1.0f, -0.5f, 0.0f, 1.0f), instance.inputColors[1].toVec(),	//6
 
 		// Lower left corner:
-		Vec4(-1.0f, +0.5f, 0.0f, 1.0f), instance.inputColors[2].toVec(),
-		Vec4(-0.5f, +1.0f, 0.0f, 1.0f), instance.inputColors[2].toVec(),
-		Vec4(-1.0f, +1.0f, 0.0f, 1.0f), instance.inputColors[2].toVec(),
+		Vec4(-1.0f, +0.5f, 0.0f, 1.0f), instance.inputColors[2].toVec(),	//7
+		Vec4(-0.5f, +1.0f, 0.0f, 1.0f), instance.inputColors[2].toVec(),	//8
+		Vec4(-1.0f, +1.0f, 0.0f, 1.0f), instance.inputColors[2].toVec(),	//9
 
 		// Lower right corner:
-		Vec4(+1.0f, +0.5f, 0.0f, 1.0f), instance.inputColors[3].toVec(),
-		Vec4(+1.0f, +1.0f, 0.0f, 1.0f), instance.inputColors[3].toVec(),
-		Vec4(+0.5f, +1.0f, 0.0f, 1.0f), instance.inputColors[3].toVec()
+		Vec4(+1.0f, +0.5f, 0.0f, 1.0f), instance.inputColors[3].toVec(),	//10
+		Vec4(+1.0f, +1.0f, 0.0f, 1.0f), instance.inputColors[3].toVec(),	//11
+		Vec4(+0.5f, +1.0f, 0.0f, 1.0f), instance.inputColors[3].toVec(),	//12
+
+		// The rest is used only renderFullSquare specified. Fills area already filled with clear color
+		// Left 1
+		Vec4(-1.0f, -0.5f, 0.0f, 1.0f), defaulClearColor,					//3
+		Vec4(-0.5f, -1.0f, 0.0f, 1.0f), defaulClearColor,					//2
+		Vec4(-1.0f, +0.5f, 0.0f, 1.0f), defaulClearColor,					//7
+
+		// Left 2
+		Vec4(-1.0f, +0.5f, 0.0f, 1.0f), defaulClearColor,					//7
+		Vec4(-0.5f, -1.0f, 0.0f, 1.0f), defaulClearColor,					//2
+		Vec4(-0.5f, +1.0f, 0.0f, 1.0f), defaulClearColor,					//8
+
+		// Left-Center
+		Vec4(-0.5f, +1.0f, 0.0f, 1.0f), defaulClearColor,					//8
+		Vec4(-0.5f, -1.0f, 0.0f, 1.0f), defaulClearColor,					//2
+		Vec4(+0.5f, -1.0f, 0.0f, 1.0f), defaulClearColor,					//4
+
+		// Right-Center
+		Vec4(+0.5f, -1.0f, 0.0f, 1.0f), defaulClearColor,					//4
+		Vec4(+0.5f, +1.0f, 0.0f, 1.0f), defaulClearColor,					//12
+		Vec4(-0.5f, +1.0f, 0.0f, 1.0f), defaulClearColor,					//8
+
+		// Right 2
+		Vec4(+0.5f, -1.0f, 0.0f, 1.0f), defaulClearColor,					//4
+		Vec4(+1.0f, -0.5f, 0.0f, 1.0f), defaulClearColor,					//6
+		Vec4(+0.5f, +1.0f, 0.0f, 1.0f), defaulClearColor,					//12
+
+		// Right 1
+		Vec4(+0.5f, +1.0f, 0.0f, 1.0f), defaulClearColor,					//12
+		Vec4(+1.0f, -0.5f, 0.0f, 1.0f), defaulClearColor,					//6
+		Vec4(+1.0f, +0.5f, 0.0f, 1.0f), defaulClearColor,					//10
 	};
+
 	const size_t							singleVertexDataSize	= 2 * sizeof(Vec4);
-	const size_t							vertexCount				= sizeof(vertexData) / singleVertexDataSize;
+	const size_t							vertexCount				= instance.renderFullSquare ? sizeof(vertexData) / singleVertexDataSize : 4*3;
+	const size_t							vertexDataSize			= vertexCount * singleVertexDataSize;
 
 	Move<VkBuffer>							vertexInputBuffer;
 	de::MovePtr<Allocation>					vertexInputMemory;
@@ -2489,7 +2642,7 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 		VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,	//	VkStructureType		sType;
 		DE_NULL,								//	const void*			pNext;
 		0u,										//	VkBufferCreateFlags	flags;
-		(VkDeviceSize)sizeof(vertexData),		//	VkDeviceSize		size;
+		(VkDeviceSize)vertexDataSize,			//	VkDeviceSize		size;
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,		//	VkBufferUsageFlags	usage;
 		VK_SHARING_MODE_EXCLUSIVE,				//	VkSharingMode		sharingMode;
 		1u,										//	deUint32			queueFamilyCount;
@@ -2744,13 +2897,13 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 		{
 			const Resource&	resource	= instance.resources.inputs[inputNdx];
 
-			const bool		hasImage	= (resource.first == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)	||
-										  (resource.first == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)	||
-										  (resource.first == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+			const bool		hasImage	= (resource.getDescriptorType() == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)	||
+										  (resource.getDescriptorType() == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)	||
+										  (resource.getDescriptorType() == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-			const bool		hasSampler	= (resource.first == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)	||
-										  (resource.first == VK_DESCRIPTOR_TYPE_SAMPLER)		||
-										  (resource.first == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+			const bool		hasSampler	= (resource.getDescriptorType() == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)	||
+										  (resource.getDescriptorType() == VK_DESCRIPTOR_TYPE_SAMPLER)			||
+										  (resource.getDescriptorType() == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
 			// Resource is a buffer
 			if (!hasImage && !hasSampler)
@@ -2772,7 +2925,7 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 					};
 
 					vector<deUint8>					resourceBytes;
-					resource.second->getBytes(resourceBytes);
+					resource.getBytes(resourceBytes);
 
 					deMemcpy(resourceMemory->getHostPtr(), &resourceBytes.front(), resourceBytes.size());
 					VK_CHECK(vk.flushMappedMemoryRanges(device, 1u, &range));
@@ -2801,7 +2954,7 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 					};
 
 					vector<deUint8>					resourceBytes;
-					resource.second->getBytes(resourceBytes);
+					resource.getBytes(resourceBytes);
 
 					deMemcpy(resourceMemory->getHostPtr(), &resourceBytes.front(), resourceBytes.size());
 					VK_CHECK(vk.flushMappedMemoryRanges(device, 1u, &range));
@@ -2822,7 +2975,7 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 			const VkDescriptorSetLayoutBinding	binding				=
 			{
 				inputNdx,											// binding
-				resource.first,										// descriptorType
+				resource.getDescriptorType(),						// descriptorType
 				1u,													// descriptorCount
 				VK_SHADER_STAGE_ALL_GRAPHICS,						// stageFlags
 				DE_NULL,											// pImmutableSamplers
@@ -2832,7 +2985,7 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 			// Note: the following code doesn't check and unify descriptors of the same type.
 			const VkDescriptorPoolSize		poolSize				=
 			{
-				resource.first,										// type
+				resource.getDescriptorType(),						// type
 				1u,													// descriptorCount
 			};
 			poolSizes.push_back(poolSize);
@@ -2859,7 +3012,7 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 				VK_WHOLE_SIZE,										//	VkDeviceSize	size;
 			};
 
-			resource.second->getBytes(resourceBytes);
+			resource.getBytes(resourceBytes);
 			deMemset((deUint8*)resourceMemory->getHostPtr(), 0xff, resourceBytes.size());
 			VK_CHECK(vk.flushMappedMemoryRanges(device, 1u, &range));
 
@@ -2870,7 +3023,7 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 			const VkDescriptorSetLayoutBinding	binding				=
 			{
 				numInResources  + outputNdx,						// binding
-				resource.first,										// descriptorType
+				resource.getDescriptorType(),						// descriptorType
 				1u,													// descriptorCount
 				VK_SHADER_STAGE_ALL_GRAPHICS,						// stageFlags
 				DE_NULL,											// pImmutableSamplers
@@ -2880,7 +3033,7 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 			// Note: the following code doesn't check and unify descriptors of the same type.
 			const VkDescriptorPoolSize		poolSize				=
 			{
-				resource.first,										// type
+				resource.getDescriptorType(),						// type
 				1u,													// descriptorCount
 			};
 			poolSizes.push_back(poolSize);
@@ -2935,18 +3088,18 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 		{
 			const Resource&	resource	= instance.resources.inputs[inputNdx];
 
-			const bool		hasImage	= (resource.first == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)	||
-										  (resource.first == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)	||
-										  (resource.first == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+			const bool		hasImage	= (resource.getDescriptorType() == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)	||
+										  (resource.getDescriptorType() == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)	||
+										  (resource.getDescriptorType() == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-			const bool		hasSampler	= (resource.first == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)	||
-										  (resource.first == VK_DESCRIPTOR_TYPE_SAMPLER)		||
-										  (resource.first == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+			const bool		hasSampler	= (resource.getDescriptorType() == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)	||
+										  (resource.getDescriptorType() == VK_DESCRIPTOR_TYPE_SAMPLER)			||
+										  (resource.getDescriptorType() == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
 			// Create image view and sampler
 			if (hasImage || hasSampler)
 			{
-				if (resource.first != VK_DESCRIPTOR_TYPE_SAMPLER)
+				if (resource.getDescriptorType() != VK_DESCRIPTOR_TYPE_SAMPLER)
 				{
 					const VkImageViewCreateInfo	imgViewParams	=
 					{
@@ -3006,7 +3159,7 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 			}
 
 			// Create descriptor buffer and image infos
-			switch (resource.first)
+			switch (resource.getDescriptorType())
 			{
 				case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
 				case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
@@ -3066,7 +3219,7 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 				inputNdx,														// binding
 				0,																// dstArrayElement
 				1u,																// descriptorCount
-				instance.resources.inputs[inputNdx].first,						// descriptorType
+				instance.resources.inputs[inputNdx].getDescriptorType(),		// descriptorType
 				( (hasImage | hasSampler)	? &dImageInfos.back()	: DE_NULL),	// pImageInfo
 				(!(hasImage | hasSampler)	? &dBufferInfos.back()	: DE_NULL),	// pBufferInfo
 				DE_NULL,														// pTexelBufferView
@@ -3085,16 +3238,16 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 			dBufferInfos.push_back(bufInfo);
 
 			const VkWriteDescriptorSet			writeSpec			= {
-				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,				// sType
-				DE_NULL,											// pNext
-				rawSet,												// dstSet
-				numInResources + outputNdx,							// binding
-				0,													// dstArrayElement
-				1u,													// descriptorCount
-				instance.resources.outputs[outputNdx].first,		// descriptorType
-				DE_NULL,											// pImageInfo
-				&dBufferInfos.back(),								// pBufferInfo
-				DE_NULL,											// pTexelBufferView
+				VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,						// sType
+				DE_NULL,													// pNext
+				rawSet,														// dstSet
+				numInResources + outputNdx,									// binding
+				0,															// dstArrayElement
+				1u,															// descriptorCount
+				instance.resources.outputs[outputNdx].getDescriptorType(),	// descriptorType
+				DE_NULL,													// pImageInfo
+				&dBufferInfos.back(),										// pBufferInfo
+				DE_NULL,													// pTexelBufferView
 			};
 			writeSpecs.push_back(writeSpec);
 		}
@@ -3183,26 +3336,31 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 
 		if (stageIt != instance.specConstants.end())
 		{
-			const size_t						numSpecConstants	= stageIt->second.size();
+			const size_t						numSpecConstants	= stageIt->second.getValuesCount();
 			vector<VkSpecializationMapEntry>	entries;
 			VkSpecializationInfo				specInfo;
+			size_t								offset				= 0;
 
 			entries.resize(numSpecConstants);
 
-			// Only support 32-bit integers as spec constants now. And their constant IDs are numbered sequentially starting from 0.
+			// Constant IDs are numbered sequentially starting from 0.
 			for (size_t ndx = 0; ndx < numSpecConstants; ++ndx)
 			{
+				const size_t valueSize	= stageIt->second.getValueSize(ndx);
+
 				entries[ndx].constantID	= (deUint32)ndx;
-				entries[ndx].offset		= deUint32(ndx * sizeof(deInt32));
-				entries[ndx].size		= sizeof(deInt32);
+				entries[ndx].offset		= static_cast<deUint32>(offset);
+				entries[ndx].size		= valueSize;
+
+				offset					+= valueSize;
 			}
 
 			specConstantEntries.push_back(entries);
 
 			specInfo.mapEntryCount	= (deUint32)numSpecConstants;
 			specInfo.pMapEntries	= specConstantEntries.back().data();
-			specInfo.dataSize		= numSpecConstants * sizeof(deInt32);
-			specInfo.pData			= stageIt->second.data();
+			specInfo.dataSize		= offset;
+			specInfo.pData			= stageIt->second.getValuesBuffer();
 			specializationInfos.push_back(specInfo);
 
 			stageInfo->pSpecializationInfo = &specializationInfos.back();
@@ -3524,7 +3682,7 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 
 	{
 		vector<VkClearValue>			clearValue;
-		clearValue.push_back(makeClearValueColorF32(0.125f, 0.25f, 0.75f, 1.0f));
+		clearValue.push_back(makeClearValueColorF32(defaulClearColor[0], defaulClearColor[1], defaulClearColor[2], defaulClearColor[3]));
 		if (needInterface)
 		{
 			clearValue.push_back(makeClearValueColorU32(0, 0, 0, 0));
@@ -3658,11 +3816,11 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 			DE_NULL,								//	const void*		pNext;
 			vertexBufferMemory->getMemory(),		//	VkDeviceMemory	mem;
 			0,										//	VkDeviceSize	offset;
-			(VkDeviceSize)sizeof(vertexData),		//	VkDeviceSize	size;
+			(VkDeviceSize)vertexDataSize,			//	VkDeviceSize	size;
 		};
 		void*						vertexBufPtr	= vertexBufferMemory->getHostPtr();
 
-		deMemcpy(vertexBufPtr, &vertexData[0], sizeof(vertexData));
+		deMemcpy(vertexBufPtr, &vertexData[0], vertexDataSize);
 		VK_CHECK(vk.flushMappedMemoryRanges(device, 1u, &range));
 	}
 
@@ -3829,7 +3987,16 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 					if (expected[eleNdx] != actual[eleNdx])
 						equal = false;
 			}
-			else if (outputType.elementType == NUMBERTYPE_FLOAT16)
+			else if (outputType.elementType == NUMBERTYPE_FLOAT16 && inputType.elementType == NUMBERTYPE_FLOAT64)
+			{
+				const double*		original	= static_cast<const double*>(inputData) + posNdx * outputType.numElements;
+				const deFloat16*	actual		= static_cast<const deFloat16*>(fragOutputBufferAccess.getPixelPtr(x, y));
+
+				for (deUint32 eleNdx = 0; eleNdx < outputType.numElements; ++eleNdx)
+					if (!compare16BitFloat64(original[eleNdx], actual[eleNdx], instance.interfaces.getRoundingMode(), context.getTestContext().getLog()))
+						equal = false;
+			}
+			else if (outputType.elementType == NUMBERTYPE_FLOAT16 && inputType.elementType == NUMBERTYPE_FLOAT32)
 			{
 				if (inputType.elementType == NUMBERTYPE_FLOAT16)
 				{
@@ -3868,6 +4035,15 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 					if (expected[eleNdx] != actual[eleNdx])
 						equal = false;
 			}
+			else if (outputType.elementType == NUMBERTYPE_FLOAT64)
+			{
+				const double*		expected	= static_cast<const double*>(outputData) + posNdx * outputType.numElements;
+				const double*		actual		= static_cast<const double*>(fragOutputBufferAccess.getPixelPtr(x, y));
+
+				for (deUint32 eleNdx = 0; eleNdx < outputType.numElements; ++eleNdx)
+					if (!compare64BitFloat(expected[eleNdx], actual[eleNdx], context.getTestContext().getLog()))
+						equal = false;
+			}
 			else {
 				DE_ASSERT(0 && "unhandled type");
 			}
@@ -3880,7 +4056,7 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 	// Check the contents in output resources match with expected.
 	for (deUint32 outputNdx = 0; outputNdx < numOutResources; ++outputNdx)
 	{
-		const BufferSp& expected = instance.resources.outputs[outputNdx].second;
+		const BufferSp& expected = instance.resources.outputs[outputNdx].getBuffer();
 
 		if (instance.resources.verifyIO != DE_NULL)
 		{
@@ -3894,6 +4070,7 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 
 			if (deMemCmp(&expectedBytes.front(), outResourceMemories[outputNdx]->getHostPtr(), expectedBytes.size()))
 				return tcu::TestStatus::fail("Resource returned doesn't match bitwisely with expected");
+
 		}
 	}
 
@@ -3980,7 +4157,7 @@ void createTestForStage (vk::VkShaderStageFlagBits	stage,
 						 const RGBA					(&inputColors)[4],
 						 const RGBA					(&outputColors)[4],
 						 const map<string, string>&	testCodeFragments,
-						 const vector<deInt32>&		specConstants,
+						 const SpecConstants&		specConstants,
 						 const PushConstants&		pushConstants,
 						 const GraphicsResources&	resources,
 						 const GraphicsInterfaces&	interfaces,
@@ -3989,7 +4166,8 @@ void createTestForStage (vk::VkShaderStageFlagBits	stage,
 						 VulkanFeatures				vulkanFeatures,
 						 tcu::TestCaseGroup*		tests,
 						 const qpTestResult			failResult,
-						 const string&				failMessageTemplate)
+						 const string&				failMessageTemplate,
+						 const bool					renderFullSquare)
 {
 	const StageData&				stageData			= getStageData(stage);
 	DE_ASSERT(stageData.getPipelineFn || stageData.initProgramsFn);
@@ -4010,6 +4188,7 @@ void createTestForStage (vk::VkShaderStageFlagBits	stage,
 	if (!failMessageTemplate.empty())
 		ctx.failMessageTemplate = failMessageTemplate;
 
+	ctx.renderFullSquare = renderFullSquare;
 	addFunctionCaseWithPrograms<InstanceContext>(tests, name, "", stageData.initProgramsFn, runAndVerifyDefaultPipeline, ctx);
 }
 
@@ -4017,7 +4196,7 @@ void createTestsForAllStages (const std::string&			name,
 							  const RGBA					(&inputColors)[4],
 							  const RGBA					(&outputColors)[4],
 							  const map<string, string>&	testCodeFragments,
-							  const vector<deInt32>&		specConstants,
+							  const SpecConstants&			specConstants,
 							  const PushConstants&			pushConstants,
 							  const GraphicsResources&		resources,
 							  const GraphicsInterfaces&		interfaces,
@@ -4055,7 +4234,7 @@ void addTessCtrlTest (tcu::TestCaseGroup* group, const char* name, const map<str
 	getDefaultColors(defaultColors);
 
 	createTestForStage(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, name,
-					   defaultColors, defaultColors, fragments, vector<deInt32>(), PushConstants(), GraphicsResources(),
+					   defaultColors, defaultColors, fragments, SpecConstants(), PushConstants(), GraphicsResources(),
 					   GraphicsInterfaces(), vector<string>(), vector<string>(), VulkanFeatures(), group);
 }
 
