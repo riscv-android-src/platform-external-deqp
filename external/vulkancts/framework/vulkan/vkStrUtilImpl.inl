@@ -268,6 +268,7 @@ const char* getStructureTypeName (VkStructureType value)
 		case VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_FD_INFO_KHR:									return "VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_FD_INFO_KHR";
 		case VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR:										return "VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR";
 		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES_KHR:					return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES_KHR";
+		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT16_INT8_FEATURES_KHR:						return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT16_INT8_FEATURES_KHR";
 		case VK_STRUCTURE_TYPE_PRESENT_REGIONS_KHR:												return "VK_STRUCTURE_TYPE_PRESENT_REGIONS_KHR";
 		case VK_STRUCTURE_TYPE_OBJECT_TABLE_CREATE_INFO_NVX:									return "VK_STRUCTURE_TYPE_OBJECT_TABLE_CREATE_INFO_NVX";
 		case VK_STRUCTURE_TYPE_INDIRECT_COMMANDS_LAYOUT_CREATE_INFO_NVX:						return "VK_STRUCTURE_TYPE_INDIRECT_COMMANDS_LAYOUT_CREATE_INFO_NVX";
@@ -346,7 +347,9 @@ const char* getStructureTypeName (VkStructureType value)
 		case VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_DIVISOR_STATE_CREATE_INFO_EXT:				return "VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_DIVISOR_STATE_CREATE_INFO_EXT";
 		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_FEATURES_EXT:			return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_FEATURES_EXT";
 		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES_KHR:							return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES_KHR";
+		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES_KHR:					return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES_KHR";
 		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES_KHR:				return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES_KHR";
+		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES_EXT:				return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES_EXT";
 		default:																				return DE_NULL;
 	}
 }
@@ -5078,6 +5081,17 @@ std::ostream& operator<< (std::ostream& s, const VkPhysicalDevicePushDescriptorP
 	return s;
 }
 
+std::ostream& operator<< (std::ostream& s, const VkPhysicalDeviceFloat16Int8FeaturesKHR& value)
+{
+	s << "VkPhysicalDeviceFloat16Int8FeaturesKHR = {\n";
+	s << "\tsType = " << value.sType << '\n';
+	s << "\tpNext = " << value.pNext << '\n';
+	s << "\tshaderFloat16 = " << value.shaderFloat16 << '\n';
+	s << "\tshaderInt8 = " << value.shaderInt8 << '\n';
+	s << '}';
+	return s;
+}
+
 std::ostream& operator<< (std::ostream& s, const VkRectLayerKHR& value)
 {
 	s << "VkRectLayerKHR = {\n";
@@ -5395,6 +5409,32 @@ std::ostream& operator<< (std::ostream& s, const VkPhysicalDeviceDriverPropertie
 	s << "\tdriverName = " << '\n' << tcu::formatArray(tcu::Format::HexIterator<char>(DE_ARRAY_BEGIN(value.driverName)), tcu::Format::HexIterator<char>(DE_ARRAY_END(value.driverName))) << '\n';
 	s << "\tdriverInfo = " << '\n' << tcu::formatArray(tcu::Format::HexIterator<char>(DE_ARRAY_BEGIN(value.driverInfo)), tcu::Format::HexIterator<char>(DE_ARRAY_END(value.driverInfo))) << '\n';
 	s << "\tconformanceVersion = " << value.conformanceVersion << '\n';
+	s << '}';
+	return s;
+}
+
+std::ostream& operator<< (std::ostream& s, const VkPhysicalDeviceFloatControlsPropertiesKHR& value)
+{
+	s << "VkPhysicalDeviceFloatControlsPropertiesKHR = {\n";
+	s << "\tsType = " << value.sType << '\n';
+	s << "\tpNext = " << value.pNext << '\n';
+	s << "\tseparateDenormSettings = " << value.separateDenormSettings << '\n';
+	s << "\tseparateRoundingModeSettings = " << value.separateRoundingModeSettings << '\n';
+	s << "\tshaderSignedZeroInfNanPreserveFloat16 = " << value.shaderSignedZeroInfNanPreserveFloat16 << '\n';
+	s << "\tshaderSignedZeroInfNanPreserveFloat32 = " << value.shaderSignedZeroInfNanPreserveFloat32 << '\n';
+	s << "\tshaderSignedZeroInfNanPreserveFloat64 = " << value.shaderSignedZeroInfNanPreserveFloat64 << '\n';
+	s << "\tshaderDenormPreserveFloat16 = " << value.shaderDenormPreserveFloat16 << '\n';
+	s << "\tshaderDenormPreserveFloat32 = " << value.shaderDenormPreserveFloat32 << '\n';
+	s << "\tshaderDenormPreserveFloat64 = " << value.shaderDenormPreserveFloat64 << '\n';
+	s << "\tshaderDenormFlushToZeroFloat16 = " << value.shaderDenormFlushToZeroFloat16 << '\n';
+	s << "\tshaderDenormFlushToZeroFloat32 = " << value.shaderDenormFlushToZeroFloat32 << '\n';
+	s << "\tshaderDenormFlushToZeroFloat64 = " << value.shaderDenormFlushToZeroFloat64 << '\n';
+	s << "\tshaderRoundingModeRTEFloat16 = " << value.shaderRoundingModeRTEFloat16 << '\n';
+	s << "\tshaderRoundingModeRTEFloat32 = " << value.shaderRoundingModeRTEFloat32 << '\n';
+	s << "\tshaderRoundingModeRTEFloat64 = " << value.shaderRoundingModeRTEFloat64 << '\n';
+	s << "\tshaderRoundingModeRTZFloat16 = " << value.shaderRoundingModeRTZFloat16 << '\n';
+	s << "\tshaderRoundingModeRTZFloat32 = " << value.shaderRoundingModeRTZFloat32 << '\n';
+	s << "\tshaderRoundingModeRTZFloat64 = " << value.shaderRoundingModeRTZFloat64 << '\n';
 	s << '}';
 	return s;
 }
@@ -6403,6 +6443,16 @@ std::ostream& operator<< (std::ostream& s, const VkPhysicalDeviceVulkanMemoryMod
 	s << "\tpNext = " << value.pNext << '\n';
 	s << "\tvulkanMemoryModel = " << value.vulkanMemoryModel << '\n';
 	s << "\tvulkanMemoryModelDeviceScope = " << value.vulkanMemoryModelDeviceScope << '\n';
+	s << '}';
+	return s;
+}
+
+std::ostream& operator<< (std::ostream& s, const VkPhysicalDeviceScalarBlockLayoutFeaturesEXT& value)
+{
+	s << "VkPhysicalDeviceScalarBlockLayoutFeaturesEXT = {\n";
+	s << "\tsType = " << value.sType << '\n';
+	s << "\tpNext = " << value.pNext << '\n';
+	s << "\tscalarBlockLayout = " << value.scalarBlockLayout << '\n';
 	s << '}';
 	return s;
 }

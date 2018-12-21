@@ -56,8 +56,7 @@ typedef vk::Unique<vk::VkShaderModule>								ModuleHandleUp;
 typedef de::SharedPtr<ModuleHandleUp>								ModuleHandleSp;
 typedef std::pair<std::string, vk::VkShaderStageFlagBits>			EntryToStage;
 typedef std::map<std::string, std::vector<EntryToStage> >			ModuleMap;
-typedef std::map<vk::VkShaderStageFlagBits, std::vector<deInt32> >	StageToSpecConstantMap;
-typedef std::pair<vk::VkDescriptorType, BufferSp>					Resource;
+typedef std::map<vk::VkShaderStageFlagBits, SpecConstants >			StageToSpecConstantMap;
 
 enum NumberType
 {
@@ -68,6 +67,8 @@ enum NumberType
 	NUMBERTYPE_INT16,
 	NUMBERTYPE_UINT16,
 	NUMBERTYPE_FLOAT16,
+	NUMBERTYPE_END16,		// Marks the end of 16-bit scalar types
+	NUMBERTYPE_FLOAT64,
 };
 
 typedef enum RoundingModeFlags_e
@@ -75,11 +76,6 @@ typedef enum RoundingModeFlags_e
 	ROUNDINGMODE_RTE = 0x1,	// Round to nearest even
 	ROUNDINGMODE_RTZ = 0x2,	// Round to zero
 } RoundingModeFlags;
-
-typedef bool (*GraphicsVerifyIOFunc) (const std::vector<Resource>&		inputs,
-									  const std::vector<AllocationSp>&	outputAllocations,
-									  const std::vector<Resource>&		expectedOutputs,
-									  tcu::TestLog&						log);
 
 typedef bool (*GraphicsVerifyBinaryFunc) (const ProgramBinary&	binary);
 
@@ -100,7 +96,7 @@ struct GraphicsResources
 	// be called. If true is returned, then the test case is assumed to
 	// have passed, if false is returned, then the test case is assumed
 	// to have failed.
-	GraphicsVerifyIOFunc		verifyIO;
+	VerifyIOFunc				verifyIO;
 	GraphicsVerifyBinaryFunc	verifyBinary;
 	SpirvVersion				spirvVersion;
 
@@ -120,7 +116,7 @@ struct IFDataType
 							, elementType	(elementT)
 						{
 							DE_ASSERT(numE > 0 && numE < 5);
-							DE_ASSERT(elementT != NUMBERTYPE_END32);
+							DE_ASSERT(elementT != NUMBERTYPE_END32 && elementT != NUMBERTYPE_END16);
 						}
 
 						IFDataType			(const IFDataType& that)
@@ -138,6 +134,8 @@ struct IFDataType
 	std::string			str					(void) const;
 
 	bool				elementIs32bit		(void) const { return elementType < NUMBERTYPE_END32; }
+	bool				elementIs64bit		(void) const { return elementType > NUMBERTYPE_END16; }
+
 	bool				isVector			(void) const { return numElements > 1; }
 
 	deUint32			numElements;
@@ -287,6 +285,7 @@ struct InstanceContext
 	GraphicsInterfaces						interfaces;
 	qpTestResult							failResult;
 	std::string								failMessageTemplate;	//!< ${reason} in the template will be replaced with a detailed failure message
+	bool									renderFullSquare;		// Forces to render whole render area, though with background color
 
 	InstanceContext (const tcu::RGBA							(&inputs)[4],
 					 const tcu::RGBA							(&outputs)[4],
@@ -423,7 +422,7 @@ void createTestForStage (vk::VkShaderStageFlagBits					stage,
 						 const tcu::RGBA							(&inputColors)[4],
 						 const tcu::RGBA							(&outputColors)[4],
 						 const std::map<std::string, std::string>&	testCodeFragments,
-						 const std::vector<deInt32>&				specConstants,
+						 const SpecConstants&						specConstants,
 						 const PushConstants&						pushConstants,
 						 const GraphicsResources&					resources,
 						 const GraphicsInterfaces&					interfaces,
@@ -432,13 +431,14 @@ void createTestForStage (vk::VkShaderStageFlagBits					stage,
 						 VulkanFeatures								vulkanFeatures,
 						 tcu::TestCaseGroup*						tests,
 						 const qpTestResult							failResult			= QP_TEST_RESULT_FAIL,
-						 const std::string&							failMessageTemplate = std::string());
+						 const std::string&							failMessageTemplate = std::string(),
+						 const bool									renderFullSquare	= false);
 
 void createTestsForAllStages (const std::string&						name,
 							  const tcu::RGBA							(&inputColors)[4],
 							  const tcu::RGBA							(&outputColors)[4],
 							  const std::map<std::string, std::string>&	testCodeFragments,
-							  const std::vector<deInt32>&				specConstants,
+							  const SpecConstants&						specConstants,
 							  const PushConstants&						pushConstants,
 							  const GraphicsResources&					resources,
 							  const GraphicsInterfaces&					interfaces,
@@ -457,7 +457,7 @@ inline void createTestsForAllStages (const std::string&							name,
 									 const qpTestResult							failResult			= QP_TEST_RESULT_FAIL,
 									 const std::string&							failMessageTemplate	= std::string())
 {
-	std::vector<deInt32>		noSpecConstants;
+	SpecConstants				noSpecConstants;
 	PushConstants				noPushConstants;
 	GraphicsResources			noResources;
 	GraphicsInterfaces			noInterfaces;
@@ -474,7 +474,7 @@ inline void createTestsForAllStages (const std::string&							name,
 									 const tcu::RGBA							(&inputColors)[4],
 									 const tcu::RGBA							(&outputColors)[4],
 									 const std::map<std::string, std::string>&	testCodeFragments,
-									 const std::vector<deInt32>&				specConstants,
+									 const SpecConstants&						specConstants,
 									 tcu::TestCaseGroup*						tests,
 									 const qpTestResult							failResult			= QP_TEST_RESULT_FAIL,
 									 const std::string&							failMessageTemplate	= std::string())
@@ -502,7 +502,7 @@ inline void createTestsForAllStages (const std::string&							name,
 									 const qpTestResult							failResult			= QP_TEST_RESULT_FAIL,
 									 const std::string&							failMessageTemplate	= std::string())
 {
-	std::vector<deInt32>		noSpecConstants;
+	SpecConstants				noSpecConstants;
 	PushConstants				noPushConstants;
 	GraphicsInterfaces			noInterfaces;
 	std::vector<std::string>	noFeatures;
@@ -525,7 +525,7 @@ inline void createTestsForAllStages (const std::string&							name,
 									 const qpTestResult							failResult			= QP_TEST_RESULT_FAIL,
 									 const std::string&							failMessageTemplate	= std::string())
 {
-	std::vector<deInt32>		noSpecConstants;
+	SpecConstants				noSpecConstants;
 	PushConstants				noPushConstants;
 	GraphicsInterfaces			noInterfaces;
 
@@ -547,7 +547,7 @@ inline void createTestsForAllStages (const std::string& name,
 									 const std::string&							failMessageTemplate	= std::string())
 {
 	GraphicsResources			noResources;
-	std::vector<deInt32>		noSpecConstants;
+	SpecConstants				noSpecConstants;
 	std::vector<std::string>	noFeatures;
 	PushConstants				noPushConstants;
 
@@ -569,7 +569,7 @@ inline void createTestsForAllStages (const std::string& name,
 									 const qpTestResult							failResult			= QP_TEST_RESULT_FAIL,
 									 const std::string&							failMessageTemplate	= std::string())
 {
-	std::vector<deInt32>			noSpecConstants;
+	SpecConstants					noSpecConstants;
 	GraphicsInterfaces				noInterfaces;
 	std::vector<std::string>		noFeatures;
 
@@ -615,6 +615,20 @@ bool compare16BitFloat (float original, deUint16 returned, RoundingModeFlags fla
 // * Different bit patterns of NaNs are allowed.
 // * For the rest, require exactly the same bit pattern.
 bool compare16BitFloat (deUint16 returned, float original, tcu::TestLog& log);
+bool compare16BitFloat (deFloat16 original, deFloat16 returned, std::string& error);
+
+// Given the original 64-bit float value, computes the corresponding 16-bit
+// float value under the given rounding mode flags and compares with the
+// returned 16-bit float value. Returns true if they are considered as equal.
+//
+// The following equivalence criteria are respected:
+// * Positive and negative zeros are considered equivalent.
+// * Denormalized floats are allowed to be flushed to zeros, including
+//   * Inputted 64bit denormalized float
+//   * Generated 16bit denormalized float
+// * Different bit patterns of NaNs are allowed.
+// * For the rest, require exactly the same bit pattern.
+bool compare16BitFloat64 (double original, deUint16 returned, RoundingModeFlags flags, tcu::TestLog& log);
 
 // Compare the returned 32-bit float against its expected value.
 //
@@ -625,6 +639,16 @@ bool compare16BitFloat (deUint16 returned, float original, tcu::TestLog& log);
 // * Different bit patterns of NaNs/Infs are allowed.
 // * For the rest, use C++ float equivalence check.
 bool compare32BitFloat (float expected, float returned, tcu::TestLog& log);
+
+// Compare the returned 64-bit float against its expected value.
+//
+// The following equivalence criteria are respected:
+// * Denormalized floats are allowed to be flushed to zeros, including
+//   * The expected value itself is a denormalized float
+//   * The expected value is a denormalized float if converted to 16bit
+// * Different bit patterns of NaNs/Infs are allowed.
+// * For the rest, use C++ float equivalence check.
+bool compare64BitFloat (double expected, double returned, tcu::TestLog& log);
 
 } // SpirVAssembly
 } // vkt

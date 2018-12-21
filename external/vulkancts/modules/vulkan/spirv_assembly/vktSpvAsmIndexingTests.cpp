@@ -57,7 +57,6 @@ enum ChainOp
 	CHAIN_OP_LAST
 };
 static const int					idxSizes[]				= { 16, 32, 64 };
-static const ComputeTestFeatures	computeTestFeatures[]	= { COMPUTE_TEST_USES_INT16, COMPUTE_TEST_USES_NONE, COMPUTE_TEST_USES_INT64 };
 static const string					chainOpTestNames[]		= { "opaccesschain", "opinboundsaccesschain", "opptraccesschain" };
 
 struct InputData
@@ -96,7 +95,6 @@ void addComputeIndexingStructTests (tcu::TestCaseGroup* group)
 				map<string, string>			specs;
 				vector<float>				outputData;
 				ComputeShaderSpec			spec;
-				const ComputeTestFeatures	features		= computeTestFeatures[idxSizeIdx];
 				int							element			= 0;
 
 				// Index an input buffer containing 2D array of 4x4 matrices. The indices are read from another
@@ -263,12 +261,18 @@ void addComputeIndexingStructTests (tcu::TestCaseGroup* group)
 				spec.assembly					= shaderSource.specialize(specs);
 				spec.numWorkGroups				= IVec3(numItems, 1, 1);
 				spec.requestedVulkanFeatures	= vulkanFeatures;
-				spec.inputTypes[0]				= VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-				spec.inputTypes[1]				= VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+				spec.inputs[0].setDescriptorType(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+				spec.inputs[1].setDescriptorType(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 
 				spec.outputs.push_back(BufferSp(new Float32Buffer(outputData)));
 
-				structGroup->addChild(new SpvAsmComputeShaderCase(testCtx, testName.c_str(), testName.c_str(), spec, features));
+				if (idxSize == 16)
+					spec.requestedVulkanFeatures.coreFeatures.shaderInt16 = VK_TRUE;
+
+				if (idxSize == 64)
+					spec.requestedVulkanFeatures.coreFeatures.shaderInt64 = VK_TRUE;
+
+				structGroup->addChild(new SpvAsmComputeShaderCase(testCtx, testName.c_str(), testName.c_str(), spec));
 			}
 		}
 	}
@@ -308,7 +312,7 @@ void addGraphicsIndexingStructTests (tcu::TestCaseGroup* group)
 				VulkanFeatures				vulkanFeatures;
 				vector<string>				extensions;
 				vector<string>				features;
-				vector<deInt32>				noSpecConstants;
+				SpecConstants				noSpecConstants;
 				PushConstants				noPushConstants;
 				GraphicsInterfaces			noInterfaces;
 				map<string, string>			specs;
@@ -422,8 +426,8 @@ void addGraphicsIndexingStructTests (tcu::TestCaseGroup* group)
 
 					"                     OpFunctionEnd\n");
 
-				resources.inputs.push_back(std::make_pair(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, BufferSp(new Float32Buffer(inputData))));
-				resources.inputs.push_back(std::make_pair(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, BufferSp(new Buffer<UVec4>(indexSelectorData))));
+				resources.inputs.push_back(Resource(BufferSp(new Float32Buffer(inputData)), VK_DESCRIPTOR_TYPE_STORAGE_BUFFER));
+				resources.inputs.push_back(Resource(BufferSp(new Buffer<UVec4>(indexSelectorData)), VK_DESCRIPTOR_TYPE_STORAGE_BUFFER));
 
 				if (idxSize == 16)
 				{
@@ -481,7 +485,7 @@ void addGraphicsIndexingStructTests (tcu::TestCaseGroup* group)
 					outputData.push_back(inputData[element * sizeof(InputData) / 4 + vec.x() * (32 * 4 * 4) + vec.y() * 4 * 4 + vec.z() * 4 + vec.w()]);
 				}
 
-				resources.outputs.push_back(std::make_pair(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, BufferSp(new Float32Buffer(outputData))));
+				resources.outputs.push_back(Resource(BufferSp(new Float32Buffer(outputData)), VK_DESCRIPTOR_TYPE_STORAGE_BUFFER));
 
 				fragments["pre_main"]	= preMain.specialize(specs);
 				fragments["decoration"]	= decoration.specialize(specs);
