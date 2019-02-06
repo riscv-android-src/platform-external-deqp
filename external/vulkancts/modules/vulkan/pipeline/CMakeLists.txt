@@ -13,6 +13,8 @@ set(DEQP_VK_PIPELINE_SRCS
 	vktPipelineDepthTests.hpp
 	vktPipelineDerivativeTests.cpp
 	vktPipelineDerivativeTests.hpp
+	vktPipelineDynamicOffsetTests.cpp
+	vktPipelineDynamicOffsetTests.hpp
 	vktPipelineEarlyDestroyTests.cpp
 	vktPipelineEarlyDestroyTests.hpp
 	vktPipelineImageSamplingInstance.cpp
@@ -21,6 +23,8 @@ set(DEQP_VK_PIPELINE_SRCS
 	vktPipelineImageTests.hpp
 	vktPipelinePushConstantTests.cpp
 	vktPipelinePushConstantTests.hpp
+	vktPipelinePushDescriptorTests.cpp
+	vktPipelinePushDescriptorTests.hpp
 	vktPipelineSpecConstantTests.hpp
 	vktPipelineSpecConstantTests.cpp
 	vktPipelineSpecConstantUtil.hpp
@@ -83,6 +87,8 @@ set(DEQP_VK_PIPELINE_LIBS
 	vkutil
 	referencerenderer
 	)
+
+PCH(DEQP_VK_PIPELINE_SRCS ../pch.cpp)
 
 add_library(deqp-vk-pipeline STATIC ${DEQP_VK_PIPELINE_SRCS})
 target_link_libraries(deqp-vk-pipeline ${DEQP_VK_PIPELINE_LIBS})

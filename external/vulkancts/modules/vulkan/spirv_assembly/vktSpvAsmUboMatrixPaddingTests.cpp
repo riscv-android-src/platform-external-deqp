@@ -125,22 +125,21 @@ void addComputeUboMatrixPaddingTest (tcu::TestCaseGroup* group)
 		"                       OpReturn\n"
 		"                       OpFunctionEnd\n";
 
-		vector<tcu::Vec4>		inputData;
-		ComputeShaderSpec		spec;
+	vector<tcu::Vec4>		inputData;
+	ComputeShaderSpec		spec;
 
-		inputData.reserve(numElements);
-		for (deUint32 numIdx = 0; numIdx < numElements; ++numIdx)
-			inputData.push_back(tcu::Vec4(rnd.getFloat(), rnd.getFloat(), rnd.getFloat(), rnd.getFloat()));
+	inputData.reserve(numElements);
+	for (deUint32 numIdx = 0; numIdx < numElements; ++numIdx)
+		inputData.push_back(tcu::Vec4(rnd.getFloat(), rnd.getFloat(), rnd.getFloat(), rnd.getFloat()));
 
-		spec.assembly			= shaderSource;
-		spec.numWorkGroups		= IVec3(numElements, 1, 1);
+	spec.assembly			= shaderSource;
+	spec.numWorkGroups		= IVec3(numElements, 1, 1);
 
-		spec.inputs.push_back(Resource(BufferSp(new Vec4Buffer(inputData)), VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER));
-		// Shader is expected to pass the input data by treating the input vec4 as mat2x2
-		spec.outputs.push_back(Resource(BufferSp(new Vec4Buffer(inputData))));
+	spec.inputs.push_back(Resource(BufferSp(new Vec4Buffer(inputData)), VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER));
+	// Shader is expected to pass the input data by treating the input vec4 as mat2x2
+	spec.outputs.push_back(Resource(BufferSp(new Vec4Buffer(inputData))));
 
-		group->addChild(new SpvAsmComputeShaderCase(testCtx, "mat2x2", "Tests mat2x2 member in UBO struct without padding (treated as vec4).", spec));
-	}
+	group->addChild(new SpvAsmComputeShaderCase(testCtx, "mat2x2", "Tests mat2x2 member in UBO struct without padding (treated as vec4).", spec));
 }
 
 void addGraphicsUboMatrixPaddingTest (tcu::TestCaseGroup* group)
@@ -154,7 +153,6 @@ void addGraphicsUboMatrixPaddingTest (tcu::TestCaseGroup* group)
 	SpecConstants				noSpecConstants;
 	PushConstants				noPushConstants;
 	GraphicsInterfaces			noInterfaces;
-	std::vector<std::string>	noFeatures;
 	std::vector<std::string>	noExtensions;
 	VulkanFeatures				vulkanFeatures = VulkanFeatures();
 
@@ -250,22 +248,24 @@ void addGraphicsUboMatrixPaddingTest (tcu::TestCaseGroup* group)
 	vulkanFeatures.coreFeatures.vertexPipelineStoresAndAtomics = DE_TRUE;
 	vulkanFeatures.coreFeatures.fragmentStoresAndAtomics = DE_FALSE;
 	createTestForStage(VK_SHADER_STAGE_VERTEX_BIT, "mat2x2_vert", defaultColors, defaultColors, fragments, noSpecConstants,
-					   noPushConstants, resources, noInterfaces, noExtensions, noFeatures, vulkanFeatures, group);
+					   noPushConstants, resources, noInterfaces, noExtensions, vulkanFeatures, group);
 
 	createTestForStage(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, "mat2x2_tessc", defaultColors, defaultColors, fragments, noSpecConstants,
-					   noPushConstants, resources, noInterfaces, noExtensions, noFeatures, vulkanFeatures, group);
+					   noPushConstants, resources, noInterfaces, noExtensions, vulkanFeatures, group);
 
 	createTestForStage(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, "mat2x2_tesse", defaultColors, defaultColors, fragments, noSpecConstants,
-					   noPushConstants, resources, noInterfaces, noExtensions, noFeatures, vulkanFeatures, group);
+					   noPushConstants, resources, noInterfaces, noExtensions, vulkanFeatures, group);
 
 	createTestForStage(VK_SHADER_STAGE_GEOMETRY_BIT, "mat2x2_geom", defaultColors, defaultColors, fragments, noSpecConstants,
-					   noPushConstants, resources, noInterfaces, noExtensions, noFeatures, vulkanFeatures, group);
+					   noPushConstants, resources, noInterfaces, noExtensions, vulkanFeatures, group);
 
 	vulkanFeatures.coreFeatures.vertexPipelineStoresAndAtomics = DE_FALSE;
 	vulkanFeatures.coreFeatures.fragmentStoresAndAtomics = DE_TRUE;
 	createTestForStage(VK_SHADER_STAGE_FRAGMENT_BIT, "mat2x2_frag", defaultColors, defaultColors, fragments, noSpecConstants,
-					   noPushConstants, resources, noInterfaces, noExtensions, noFeatures, vulkanFeatures, group);
+					   noPushConstants, resources, noInterfaces, noExtensions, vulkanFeatures, group);
 }
+
+} // anonymous
 
 tcu::TestCaseGroup* createUboMatrixPaddingComputeGroup (tcu::TestContext& testCtx)
 {

@@ -2377,6 +2377,25 @@ struct VkPhysicalDeviceFloatControlsPropertiesKHR
 	VkBool32		shaderRoundingModeRTZFloat64;
 };
 
+struct VkSubpassDescriptionDepthStencilResolveKHR
+{
+	VkStructureType						sType;
+	const void*							pNext;
+	VkResolveModeFlagBitsKHR			depthResolveMode;
+	VkResolveModeFlagBitsKHR			stencilResolveMode;
+	const VkAttachmentReference2KHR*	pDepthStencilResolveAttachment;
+};
+
+struct VkPhysicalDeviceDepthStencilResolvePropertiesKHR
+{
+	VkStructureType			sType;
+	void*					pNext;
+	VkResolveModeFlagsKHR	supportedDepthResolveModes;
+	VkResolveModeFlagsKHR	supportedStencilResolveModes;
+	VkBool32				independentResolveNone;
+	VkBool32				independentResolve;
+};
+
 struct VkDebugReportCallbackCreateInfoEXT
 {
 	VkStructureType					sType;
@@ -2515,6 +2534,30 @@ struct VkViSurfaceCreateInfoNN
 	const void*					pNext;
 	VkViSurfaceCreateFlagsNN	flags;
 	void*						window;
+};
+
+struct VkConditionalRenderingBeginInfoEXT
+{
+	VkStructureType					sType;
+	const void*						pNext;
+	VkBuffer						buffer;
+	VkDeviceSize					offset;
+	VkConditionalRenderingFlagsEXT	flags;
+};
+
+struct VkPhysicalDeviceConditionalRenderingFeaturesEXT
+{
+	VkStructureType	sType;
+	void*			pNext;
+	VkBool32		conditionalRendering;
+	VkBool32		inheritedConditionalRendering;
+};
+
+struct VkCommandBufferInheritanceConditionalRenderingInfoEXT
+{
+	VkStructureType	sType;
+	const void*		pNext;
+	VkBool32		conditionalRenderingEnable;
 };
 
 struct VkDeviceGeneratedCommandsFeaturesNVX
@@ -3000,6 +3043,57 @@ struct VkExternalFormatANDROID
 	VkStructureType	sType;
 	void*			pNext;
 	deUint64		externalFormat;
+};
+
+struct VkImportMemoryHostPointerInfoEXT
+{
+	VkStructureType						sType;
+	const void*							pNext;
+	VkExternalMemoryHandleTypeFlagBits	handleType;
+	void*								pHostPointer;
+};
+
+struct VkMemoryHostPointerPropertiesEXT
+{
+	VkStructureType	sType;
+	void*			pNext;
+	deUint32		memoryTypeBits;
+};
+
+struct VkPhysicalDeviceExternalMemoryHostPropertiesEXT
+{
+	VkStructureType	sType;
+	void*			pNext;
+	VkDeviceSize	minImportedHostPointerAlignment;
+};
+
+struct VkPhysicalDeviceVertexAttributeDivisorPropertiesEXT
+{
+	VkStructureType	sType;
+	void*			pNext;
+	deUint32		maxVertexAttribDivisor;
+};
+
+struct VkVertexInputBindingDivisorDescriptionEXT
+{
+	deUint32	binding;
+	deUint32	divisor;
+};
+
+struct VkPipelineVertexInputDivisorStateCreateInfoEXT
+{
+	VkStructureType										sType;
+	const void*											pNext;
+	deUint32											vertexBindingDivisorCount;
+	const VkVertexInputBindingDivisorDescriptionEXT*	pVertexBindingDivisors;
+};
+
+struct VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT
+{
+	VkStructureType	sType;
+	void*			pNext;
+	VkBool32		vertexAttributeInstanceRateDivisor;
+	VkBool32		vertexAttributeInstanceRateZeroDivisor;
 };
 
 struct VkDescriptorSetLayoutBindingFlagsCreateInfoEXT

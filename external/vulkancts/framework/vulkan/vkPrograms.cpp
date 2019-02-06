@@ -70,6 +70,36 @@ ProgramBinary::ProgramBinary (ProgramFormat format, size_t binarySize, const deU
 namespace
 {
 
+bool isNativeSpirVBinaryEndianness (void)
+{
+#if (DE_ENDIANNESS == SPIRV_BINARY_ENDIANNESS)
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool isSaneSpirVBinary (const ProgramBinary& binary)
+{
+	const deUint32	spirvMagicWord	= 0x07230203;
+	const deUint32	spirvMagicBytes	= isNativeSpirVBinaryEndianness()
+									? spirvMagicWord
+									: deReverseBytes32(spirvMagicWord);
+
+	DE_ASSERT(binary.getFormat() == PROGRAM_FORMAT_SPIRV);
+
+	if (binary.getSize() % sizeof(deUint32) != 0)
+		return false;
+
+	if (binary.getSize() < sizeof(deUint32))
+		return false;
+
+	if (*(const deUint32*)binary.getBinary() != spirvMagicBytes)
+		return false;
+
+	return true;
+}
+
 #if defined(DEQP_HAVE_SPIRV_TOOLS)
 
 void optimizeCompiledBinary (vector<deUint32>& binary, int optimizationRecipe, const SpirvVersion spirvVersion)
@@ -293,41 +323,6 @@ void optimizeCompiledBinary (vector<deUint32>& binary, int optimizationRecipe, c
 		TCU_THROW(InternalError, "Optimizer call failed");
 }
 
-#endif // defined(DEQP_HAVE_SPIRV_TOOLS)
-
-
-bool isNativeSpirVBinaryEndianness (void)
-{
-#if (DE_ENDIANNESS == SPIRV_BINARY_ENDIANNESS)
-	return true;
-#else
-	return false;
-#endif
-}
-
-bool isSaneSpirVBinary (const ProgramBinary& binary)
-{
-	const deUint32	spirvMagicWord	= 0x07230203;
-	const deUint32	spirvMagicBytes	= isNativeSpirVBinaryEndianness()
-									? spirvMagicWord
-									: deReverseBytes32(spirvMagicWord);
-
-	DE_ASSERT(binary.getFormat() == PROGRAM_FORMAT_SPIRV);
-
-	if (binary.getSize() % sizeof(deUint32) != 0)
-		return false;
-
-	if (binary.getSize() < sizeof(deUint32))
-		return false;
-
-	if (*(const deUint32*)binary.getBinary() != spirvMagicBytes)
-		return false;
-
-	return true;
-}
-
-#if defined(DEQP_HAVE_SPIRV_TOOLS)
-
 ProgramBinary* createProgramBinaryFromSpirV (const vector<deUint32>& binary)
 {
 	DE_ASSERT(!binary.empty());
@@ -473,7 +468,9 @@ vk::ProgramBinary* shadercacheLoad (const std::string& shaderstring, const char*
 			delete[] source;
 			if (file) fclose(file);
 			cacheFileMutex.unlock();
-			return new vk::ProgramBinary((vk::ProgramFormat)format, length, bin);
+			vk::ProgramBinary* res = new vk::ProgramBinary((vk::ProgramFormat)format, length, bin);
+			delete[] bin;
+			return res;
 		}
 	}
 	if (file) fclose(file);

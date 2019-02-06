@@ -45,6 +45,7 @@
 #include "vkBuilderUtil.hpp"
 #include "vkCmdUtil.hpp"
 #include "vkObjUtil.hpp"
+#include "vkImageUtil.hpp"
 
 #include <map>
 #include <set>
@@ -1878,10 +1879,10 @@ tcu::TestStatus UniformBlockCaseInstance::iterate (void)
 	// Upload attrbiutes data
 	{
 		deMemcpy(positionsAlloc->getHostPtr(), positions, sizeof(positions));
-		flushMappedMemoryRange(vk, device, positionsAlloc->getMemory(), positionsAlloc->getOffset(), sizeof(positions));
+		flushAlloc(vk, device, *positionsAlloc);
 
 		deMemcpy(indicesAlloc->getHostPtr(), indices, sizeof(indices));
-		flushMappedMemoryRange(vk, device, indicesAlloc->getMemory(), indicesAlloc->getOffset(), sizeof(indices));
+		flushAlloc(vk, device, *indicesAlloc);
 	}
 
 	vk::Unique<VkImage>					colorImage			(createImage2D(m_context,
@@ -2034,74 +2035,7 @@ tcu::TestStatus UniformBlockCaseInstance::iterate (void)
 	vk.cmdDrawIndexed(*cmdBuffer, DE_LENGTH_OF_ARRAY(indices), 1u, 0u, 0u, 0u);
 	endRenderPass(vk, *cmdBuffer);
 
-	// Add render finish barrier
-	{
-		const vk::VkImageMemoryBarrier  renderFinishBarrier =
-		{
-			vk::VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,		// VkStructureType			sType;
-			DE_NULL,										// const void*				pNext
-			vk::VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,		// VVkAccessFlags			srcAccessMask;
-			vk::VK_ACCESS_TRANSFER_READ_BIT,				// VkAccessFlags			dstAccessMask;
-			vk::VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,	// VkImageLayout			oldLayout;
-			vk::VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,		// VkImageLayout			newLayout;
-			queueFamilyIndex,								// deUint32					srcQueueFamilyIndex;
-			queueFamilyIndex,								// deUint32					dstQueueFamilyIndex;
-			*colorImage,									// VkImage					image;
-			{
-				vk::VK_IMAGE_ASPECT_COLOR_BIT,			// VkImageAspectFlags	aspectMask;
-				0u,										// deUint32				baseMipLevel;
-				1u,										// deUint32				mipLevels;
-				0u,										// deUint32				baseArraySlice;
-				1u,										// deUint32				arraySize;
-			}												// VkImageSubresourceRange	subresourceRange
-		};
-
-		vk.cmdPipelineBarrier(*cmdBuffer, vk::VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, vk::VK_PIPELINE_STAGE_TRANSFER_BIT, (vk::VkDependencyFlags)0,
-							  0, (const vk::VkMemoryBarrier*)DE_NULL,
-							  0, (const vk::VkBufferMemoryBarrier*)DE_NULL,
-							  1, &renderFinishBarrier);
-	}
-
-	// Add Image->Buffer copy command
-	{
-		const vk::VkBufferImageCopy copyParams =
-		{
-			(vk::VkDeviceSize)0u,					// VkDeviceSize				bufferOffset;
-			(deUint32)RENDER_WIDTH,					// deUint32					bufferRowLength;
-			(deUint32)RENDER_HEIGHT,				// deUint32					bufferImageHeight;
-			{
-				vk::VK_IMAGE_ASPECT_COLOR_BIT,	// VkImageAspect	aspect;
-				0u,								// deUint32			mipLevel;
-				0u,								// deUint32			arrayLayer;
-				1u,								// deUint32			arraySize;
-			},										// VkImageSubresourceCopy	imageSubresource
-			{ 0u, 0u, 0u },							// VkOffset3D				imageOffset;
-			{ RENDER_WIDTH, RENDER_HEIGHT, 1u }		// VkExtent3D				imageExtent;
-		};
-
-		vk.cmdCopyImageToBuffer(*cmdBuffer, *colorImage, vk::VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, *readImageBuffer, 1u, &copyParams);
-	}
-
-	// Add copy finish barrier
-	{
-		const vk::VkBufferMemoryBarrier copyFinishBarrier	=
-		{
-			vk::VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,		// VkStructureType		sType;
-			DE_NULL,											// const void*			pNext;
-			VK_ACCESS_TRANSFER_WRITE_BIT,						// VkAccessFlags		srcAccessMask;
-			VK_ACCESS_HOST_READ_BIT,							// VkAccessFlags		dstAccessMask;
-			queueFamilyIndex,									// deUint32				srcQueueFamilyIndex;
-			queueFamilyIndex,									// deUint32				destQueueFamilyIndex;
-			*readImageBuffer,									// VkBuffer				buffer;
-			0u,													// VkDeviceSize			offset;
-			(vk::VkDeviceSize)(RENDER_WIDTH * RENDER_HEIGHT * 4)// VkDeviceSize			size;
-		};
-
-		vk.cmdPipelineBarrier(*cmdBuffer, vk::VK_PIPELINE_STAGE_TRANSFER_BIT, vk::VK_PIPELINE_STAGE_HOST_BIT, (vk::VkDependencyFlags)0,
-							  0, (const vk::VkMemoryBarrier*)DE_NULL,
-							  1, &copyFinishBarrier,
-							  0, (const vk::VkImageMemoryBarrier*)DE_NULL);
-	}
+	copyImageToBuffer(vk, *cmdBuffer, *colorImage, *readImageBuffer, tcu::IVec2(RENDER_WIDTH, RENDER_HEIGHT));
 
 	endCommandBuffer(vk, *cmdBuffer);
 
@@ -2113,8 +2047,7 @@ tcu::TestStatus UniformBlockCaseInstance::iterate (void)
 	{
 		const tcu::TextureFormat textureFormat(tcu::TextureFormat::RGBA, tcu::TextureFormat::UNORM_INT8);
 		const tcu::ConstPixelBufferAccess imgAccess(textureFormat, RENDER_WIDTH, RENDER_HEIGHT, 1, readImageAlloc->getHostPtr());
-		const vk::VkDeviceSize bufferSize = RENDER_WIDTH * RENDER_HEIGHT * 4;
-		invalidateMappedMemoryRange(vk, device, readImageAlloc->getMemory(), readImageAlloc->getOffset(), bufferSize);
+		invalidateAlloc(vk, device, *readImageAlloc);
 
 		tcu::copy(surface.getAccess(), imgAccess);
 	}
@@ -2164,7 +2097,7 @@ vk::VkDescriptorBufferInfo UniformBlockCaseInstance::addUniformData (deUint32 si
 	de::MovePtr<Allocation>			alloc	= allocateAndBindMemory(m_context, *buffer, vk::MemoryRequirement::HostVisible);
 
 	deMemcpy(alloc->getHostPtr(), dataPtr, size);
-	flushMappedMemoryRange(vk, vkDevice, alloc->getMemory(), alloc->getOffset(), size);
+	flushAlloc(vk, vkDevice, *alloc);
 
 	const VkDescriptorBufferInfo			descriptor			=
 	{
