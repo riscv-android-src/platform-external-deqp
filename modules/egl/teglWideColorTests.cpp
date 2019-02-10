@@ -98,20 +98,20 @@ public:
 						WideColorTest				(EglTestContext& eglTestCtx, const char* name, const char* description);
 						~WideColorTest				(void);
 
-	void				init						(void);
-	void				deinit						(void);
-	void				checkPixelFloatSupport		(void);
-	void				checkColorSpaceSupport		(void);
-	void				checkDisplayP3Support		(void);
+	void				init								(void);
+	void				deinit								(void);
+	void				checkPixelFloatSupport				(void);
+	void				checkColorSpaceSupport				(void);
+	void				checkDisplayP3Support				(void);
 	void				checkDisplayP3PassthroughSupport	(void);
-	void				check1010102Support			(void);
-	void				checkFP16Support			(void);
-	void				checkSCRGBSupport			(void);
-	void				checkSCRGBLinearSupport			(void);
-	void				checkbt2020linear			(void);
-	void				checkbt2020pq				(void);
-	void				checkSMPTE2086				(void);
-	void				checkCTA861_3				(void);
+	void				check1010102Support					(void);
+	void				checkFP16Support					(void);
+	void				checkSCRGBSupport					(void);
+	void				checkSCRGBLinearSupport				(void);
+	void				checkbt2020linear					(void);
+	void				checkbt2020pq						(void);
+	void				checkSMPTE2086						(void);
+	void				checkCTA861_3						(void);
 
 protected:
 	void				initEGLSurface				(EGLConfig config);
@@ -577,20 +577,20 @@ public:
 	void				addTestAttributes		(const EGLint* attributes);
 
 protected:
-	void				readPixels				(const glw::Functions& gl, float* dataPtr);
-	void				readPixels				(const glw::Functions& gl, deUint32* dataPtr);
-	void				readPixels				(const glw::Functions& gl, deUint8* dataPtr);
-	deUint32			expectedUint10			(float reference);
-	deUint32			expectedUint2			(float reference);
-	deUint8				expectedUint8			(float reference);
-	deUint8				expectedAlpha8			(float reference);
-	bool				checkWithThreshold8		(deUint8 value, deUint8 reference, deUint8 threshold = 1);
-	bool				checkWithThreshold10	(deUint32 value, deUint32 reference, deUint32 threshold = 1);
-	bool				checkWithThresholdFloat (float value, float reference, float threshold);
-	void				doClearTest				(EGLSurface surface);
-	void				testPixels				(float reference, float increment);
+	void				readPixels						(const glw::Functions& gl, float* dataPtr);
+	void				readPixels						(const glw::Functions& gl, deUint32* dataPtr);
+	void				readPixels						(const glw::Functions& gl, deUint8* dataPtr);
+	deUint32			expectedUint10					(float reference);
+	deUint32			expectedUint2					(float reference);
+	deUint8				expectedUint8					(float reference);
+	deUint8				expectedAlpha8					(float reference);
+	bool				checkWithThreshold8				(deUint8 value, deUint8 reference, deUint8 threshold = 1);
+	bool				checkWithThreshold10			(deUint32 value, deUint32 reference, deUint32 threshold = 1);
+	bool				checkWithThresholdFloat			(float value, float reference, float threshold);
+	void				doClearTest						(EGLSurface surface);
+	void				testPixels						(float reference, float increment);
 	void				testFramebufferColorEncoding	();
-	void				writeEglConfig			(EGLConfig config);
+	void				writeEglConfig					(EGLConfig config);
 
 private:
 	std::vector<EGLint>					m_attribList;
@@ -674,6 +674,7 @@ void WideColorSurfaceTest::init (void)
 			break;
 		case EGL_GL_COLORSPACE_DISPLAY_P3_PASSTHROUGH_EXT:
 			checkDisplayP3PassthroughSupport();
+			break;
 		case EGL_GL_COLORSPACE_SCRGB_EXT:
 			checkSCRGBSupport();
 			break;
