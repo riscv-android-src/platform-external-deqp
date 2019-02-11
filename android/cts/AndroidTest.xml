@@ -24,6 +24,8 @@
 	</target_preparer>
 	<option name="test-suite-tag" value="cts"/>
 	<option key="component" name="config-descriptor:metadata" value="deqp"/>
+	<option key="parameter" name="config-descriptor:metadata" value="not_instant_app"/>
+	<option key="parameter" name="config-descriptor:metadata" value="multi_abi"/>
 	<object class="com.android.tradefed.testtype.suite.module.TestFailureModuleController" type="module_controller">
 		<option name="screenshot-on-failure" value="false"/>
 	</object>
