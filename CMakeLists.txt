@@ -96,8 +96,15 @@ add_subdirectory(external/glslang)
 add_subdirectory(external/spirv-tools)
 
 # VkRunner
-add_subdirectory(external/vkrunner)
-include_directories(external/vkrunner/src)
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/vkrunner/src")
+	message(STATUS "VkRunner found, integration enabled")
+	set(DEQP_HAVE_VKRUNNER 1)
+	add_definitions("-DDEQP_HAVE_VKRUNNER=1")
+	add_subdirectory(external/vkrunner)
+	include_directories(external/vkrunner/src)
+else()
+	message(STATUS "VkRunner not found, integration disabled")
+endif ()
 
 # spirv-headers
 set(SPIRV_INCLUDE_PATH "${PROJECT_SOURCE_DIR}/external/spirv-headers/src/include")

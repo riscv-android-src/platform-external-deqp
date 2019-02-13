@@ -12,8 +12,11 @@ set(DEQP_VK_VKRUNNER_SRCS
 set(DEQP_VK_VKRUNNER_LIBS
 	tcutil
 	vkutil
-	vkrunner
 	)
+
+if (DEQP_HAVE_VKRUNNER)
+	list(APPEND DEQP_VK_VKRUNNER_LIBS vkrunner)
+endif()
 
 add_library(deqp-vk-vkrunner STATIC ${DEQP_VK_VKRUNNER_SRCS})
 target_link_libraries(deqp-vk-vkrunner ${DEQP_VK_VKRUNNER_LIBS})

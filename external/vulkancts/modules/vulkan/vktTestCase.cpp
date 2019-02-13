@@ -36,9 +36,14 @@
 
 #include "deSTLUtil.hpp"
 #include "deMemory.h"
+
+#if defined(DEQP_HAVE_VKRUNNER)
 #include <vkrunner/vkrunner.h>
+#endif
 
 #include <set>
+
+struct vk_executor;
 
 namespace vkt
 {
@@ -596,6 +601,7 @@ Context::Context (tcu::TestContext&				testCtx,
 	, m_device				(new DefaultDevice(m_platformInterface, testCtx.getCommandLine()))
 	, m_allocator			(createAllocator(m_device.get()))
 {
+#if defined(DEQP_HAVE_VKRUNNER)
 	m_config = vr_config_new();
 	vr_config_set_user_data(m_config, this);
 	vr_config_set_error_cb(m_config, errorCb);
@@ -606,12 +612,15 @@ Context::Context (tcu::TestContext&				testCtx,
 						   getPhysicalDevice(),
 						   getUniversalQueueFamilyIndex(),
 						   getDevice());
+#endif
 }
 
 Context::~Context (void)
 {
+#if defined(DEQP_HAVE_VKRUNNER)
 	vr_config_free(m_config);
 	vr_executor_free(m_executor);
+#endif
 }
 
 deUint32								Context::getAvailableInstanceVersion	(void) const { return m_device->getAvailableInstanceVersion();	}

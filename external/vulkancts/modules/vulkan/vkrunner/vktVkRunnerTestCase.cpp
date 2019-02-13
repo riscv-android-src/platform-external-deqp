@@ -22,7 +22,9 @@
  *//*--------------------------------------------------------------------*/
 
 #include <assert.h>
+#if defined(DEQP_HAVE_VKRUNNER)
 #include <vkrunner/vkrunner.h>
+#endif
 
 #include "vktVkRunnerTestCase.hpp"
 #include "tcuTestLog.hpp"
@@ -32,6 +34,7 @@ namespace vkt
 namespace vkrunner
 {
 
+#if defined(DEQP_HAVE_VKRUNNER)
 static const char *
 vr_stage_name[VR_SHADER_STAGE_N_STAGES] = {
 	"vertex",
@@ -41,7 +44,9 @@ vr_stage_name[VR_SHADER_STAGE_N_STAGES] = {
 	"fragment",
 	"compute",
 };
+#endif
 
+#if defined(DEQP_HAVE_VKRUNNER)
 static void errorCb(const char* message,
 					void* user_data)
 {
@@ -53,6 +58,7 @@ static void errorCb(const char* message,
 		<< "\n"
 		<< tcu::TestLog::EndMessage;
 }
+#endif
 
 VkRunnerTestCase::VkRunnerTestCase (tcu::TestContext&	testCtx,
 									const char*		categoryname,
@@ -61,6 +67,7 @@ VkRunnerTestCase::VkRunnerTestCase (tcu::TestContext&	testCtx,
 									const char*		description)
 	: TestCase(testCtx, name, description)
 {
+#if defined(DEQP_HAVE_VKRUNNER)
 	m_testCaseData.categoryname = categoryname;
 	m_testCaseData.filename = filename;
 	m_testCaseData.num_shaders = 0;
@@ -72,10 +79,15 @@ VkRunnerTestCase::VkRunnerTestCase (tcu::TestContext&	testCtx,
 	readFilename.append("/");
 	readFilename.append(m_testCaseData.filename);
 	m_testCaseData.source = vr_source_from_file(readFilename.c_str());
+#else
+	(void) categoryname;
+	(void) filename;
+#endif
 }
 
 VkRunnerTestCase::~VkRunnerTestCase (void)
 {
+#if defined(DEQP_HAVE_VKRUNNER)
 	if (m_testCaseData.num_shaders)
 	{
 		for (int i = 0; i < m_testCaseData.num_shaders; i++)
@@ -89,18 +101,25 @@ VkRunnerTestCase::~VkRunnerTestCase (void)
 		vr_script_free(m_testCaseData.script);
 	if (m_testCaseData.source)
 		vr_source_free(m_testCaseData.source);
+#endif
 }
 
 void VkRunnerTestCase::addTokenReplacement(const char *token,
 									  const char *replacement)
 {
+#if defined(DEQP_HAVE_VKRUNNER)
 	vr_source_add_token_replacement(m_testCaseData.source,
 									token,
 									replacement);
+#else
+	(void) token;
+	(void) replacement;
+#endif
 }
 
 bool VkRunnerTestCase::getShaders()
 {
+#if defined(DEQP_HAVE_VKRUNNER)
 	/* Create a temporary vr_config to log shader_test parsing errors to test's log file */
 	struct vr_config *config = vr_config_new();
 	vr_config_set_user_data(config, this);
@@ -122,6 +141,9 @@ bool VkRunnerTestCase::getShaders()
 							m_testCaseData.shaders);
 	vr_config_free(config);
 	return true;
+#else
+	return false;
+#endif
 }
 
 TestInstance* VkRunnerTestCase::createInstance(Context& ctx) const
@@ -134,6 +156,7 @@ TestInstance* VkRunnerTestCase::createInstance(Context& ctx) const
 
 void VkRunnerTestCase::initPrograms(vk::SourceCollections& programCollection) const
 {
+#if defined(DEQP_HAVE_VKRUNNER)
 	int num_shader[VR_SHADER_STAGE_N_STAGES] = {0};
 
 	for (int i = 0; i < m_testCaseData.num_shaders; i++)
@@ -173,10 +196,14 @@ void VkRunnerTestCase::initPrograms(vk::SourceCollections& programCollection) co
 			programCollection.spirvAsmSources.add(vr_stage_name[m_testCaseData.shaders[i].stage]) << m_testCaseData.shaders[i].source;
 		}
 	}
+#else
+	(void) programCollection;
+#endif
 }
 
 tcu::TestStatus VkRunnerTestInstance::iterate (void)
 {
+#if defined(DEQP_HAVE_VKRUNNER)
 	/* Get the compiled version of the text-based shaders and replace them */
 	for (int stage = 0; stage < VR_SHADER_STAGE_N_STAGES; stage++)
 	{
@@ -209,6 +236,9 @@ tcu::TestStatus VkRunnerTestInstance::iterate (void)
 	}
 
 	return tcu::TestStatus::fail("Fail");
+#else
+	return tcu::TestStatus::fail("Not built with VkRunner support");
+#endif
 }
 
 } // vkrunner

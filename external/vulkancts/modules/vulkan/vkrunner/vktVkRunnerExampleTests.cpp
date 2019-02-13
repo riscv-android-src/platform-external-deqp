@@ -21,8 +21,6 @@
  * \brief Functional tests using vkrunner
  *//*--------------------------------------------------------------------*/
 
-#include <vkrunner/vkrunner.h>
-
 #include "vktVkRunnerExampleTests.hpp"
 #include "vktVkRunnerTestCase.hpp"
 #include "vktTestGroupUtil.hpp"
