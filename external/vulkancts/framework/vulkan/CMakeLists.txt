@@ -115,6 +115,10 @@ if(DEQP_HAVE_SPIRV_TOOLS)
 	set(VKUTIL_LIBS ${VKUTIL_LIBS} SPIRV-Tools SPIRV-Tools-opt)
 endif()
 
+if(DEQP_HAVE_RENDERDOC_HEADER)
+	add_definitions(-DDEQP_HAVE_RENDERDOC_HEADER=1)
+endif()
+
 PCH(VKUTILNOSHADER_SRCS ../../modules/vulkan/pch.cpp)
 PCH(VKUTIL_SRCS ../../modules/vulkan/pch.cpp)
 
