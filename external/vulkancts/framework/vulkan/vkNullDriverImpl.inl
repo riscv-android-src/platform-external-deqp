@@ -1666,6 +1666,17 @@ VKAPI_ATTR VkResult VKAPI_CALL getMemoryWin32HandleNV (VkDevice device, VkDevice
 	return VK_SUCCESS;
 }
 
+VKAPI_ATTR void VKAPI_CALL cmdBeginConditionalRenderingEXT (VkCommandBuffer commandBuffer, const VkConditionalRenderingBeginInfoEXT* pConditionalRenderingBegin)
+{
+	DE_UNREF(commandBuffer);
+	DE_UNREF(pConditionalRenderingBegin);
+}
+
+VKAPI_ATTR void VKAPI_CALL cmdEndConditionalRenderingEXT (VkCommandBuffer commandBuffer)
+{
+	DE_UNREF(commandBuffer);
+}
+
 VKAPI_ATTR void VKAPI_CALL cmdProcessCommandsNVX (VkCommandBuffer commandBuffer, const VkCmdProcessCommandsInfoNVX* pProcessCommandsInfo)
 {
 	DE_UNREF(commandBuffer);
@@ -1842,6 +1853,15 @@ VKAPI_ATTR VkResult VKAPI_CALL getValidationCacheDataEXT (VkDevice device, VkVal
 	DE_UNREF(validationCache);
 	DE_UNREF(pDataSize);
 	DE_UNREF(pData);
+	return VK_SUCCESS;
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL getMemoryHostPointerPropertiesEXT (VkDevice device, VkExternalMemoryHandleTypeFlagBits handleType, const void* pHostPointer, VkMemoryHostPointerPropertiesEXT* pMemoryHostPointerProperties)
+{
+	DE_UNREF(device);
+	DE_UNREF(handleType);
+	DE_UNREF(pHostPointer);
+	DE_UNREF(pMemoryHostPointerProperties);
 	return VK_SUCCESS;
 }
 
@@ -2135,6 +2155,8 @@ static const tcu::StaticFunctionLibrary::Entry s_deviceFunctions[] =
 	VK_NULL_FUNC_ENTRY(vkCmdDrawIndirectCountKHR,					cmdDrawIndirectCountKHR),
 	VK_NULL_FUNC_ENTRY(vkCmdDrawIndexedIndirectCountKHR,			cmdDrawIndexedIndirectCountKHR),
 	VK_NULL_FUNC_ENTRY(vkGetMemoryWin32HandleNV,					getMemoryWin32HandleNV),
+	VK_NULL_FUNC_ENTRY(vkCmdBeginConditionalRenderingEXT,			cmdBeginConditionalRenderingEXT),
+	VK_NULL_FUNC_ENTRY(vkCmdEndConditionalRenderingEXT,				cmdEndConditionalRenderingEXT),
 	VK_NULL_FUNC_ENTRY(vkCmdProcessCommandsNVX,						cmdProcessCommandsNVX),
 	VK_NULL_FUNC_ENTRY(vkCmdReserveSpaceForCommandsNVX,				cmdReserveSpaceForCommandsNVX),
 	VK_NULL_FUNC_ENTRY(vkCreateIndirectCommandsLayoutNVX,			createIndirectCommandsLayoutNVX),
@@ -2157,6 +2179,7 @@ static const tcu::StaticFunctionLibrary::Entry s_deviceFunctions[] =
 	VK_NULL_FUNC_ENTRY(vkDestroyValidationCacheEXT,					destroyValidationCacheEXT),
 	VK_NULL_FUNC_ENTRY(vkMergeValidationCachesEXT,					mergeValidationCachesEXT),
 	VK_NULL_FUNC_ENTRY(vkGetValidationCacheDataEXT,					getValidationCacheDataEXT),
+	VK_NULL_FUNC_ENTRY(vkGetMemoryHostPointerPropertiesEXT,			getMemoryHostPointerPropertiesEXT),
 	VK_NULL_FUNC_ENTRY(vkGetAndroidHardwareBufferPropertiesANDROID,	getAndroidHardwareBufferPropertiesANDROID),
 	VK_NULL_FUNC_ENTRY(vkGetMemoryAndroidHardwareBufferANDROID,		getMemoryAndroidHardwareBufferANDROID),
 };

@@ -3122,7 +3122,6 @@ InstanceContext GraphicsTestGroupBuilder::createInstanceContext(const TestCaseIn
 	resources.outputs.push_back(Resource(outBufferSp, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER));
 	resources.verifyIO = checkFloatsLUT[outFloatType];
 
-	vector<string>			features;
 	StageToSpecConstantMap	noSpecConstants;
 	PushConstants			noPushConstants;
 	GraphicsInterfaces		noInterfaces;
@@ -3151,7 +3150,6 @@ InstanceContext GraphicsTestGroupBuilder::createInstanceContext(const TestCaseIn
 						resources,
 						noInterfaces,
 						extensions,
-						features,
 						vulkanFeatures,
 						testedStage);
 

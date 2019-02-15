@@ -176,6 +176,8 @@ virtual void				cmdDrawIndexedIndirectCountAMD				(VkCommandBuffer commandBuffer
 virtual void				cmdDrawIndirectCountKHR						(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, VkBuffer countBuffer, VkDeviceSize countBufferOffset, deUint32 maxDrawCount, deUint32 stride) const;
 virtual void				cmdDrawIndexedIndirectCountKHR				(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, VkBuffer countBuffer, VkDeviceSize countBufferOffset, deUint32 maxDrawCount, deUint32 stride) const;
 virtual VkResult			getMemoryWin32HandleNV						(VkDevice device, VkDeviceMemory memory, VkExternalMemoryHandleTypeFlagsNV handleType, pt::Win32Handle* pHandle) const;
+virtual void				cmdBeginConditionalRenderingEXT				(VkCommandBuffer commandBuffer, const VkConditionalRenderingBeginInfoEXT* pConditionalRenderingBegin) const;
+virtual void				cmdEndConditionalRenderingEXT				(VkCommandBuffer commandBuffer) const;
 virtual void				cmdProcessCommandsNVX						(VkCommandBuffer commandBuffer, const VkCmdProcessCommandsInfoNVX* pProcessCommandsInfo) const;
 virtual void				cmdReserveSpaceForCommandsNVX				(VkCommandBuffer commandBuffer, const VkCmdReserveSpaceForCommandsInfoNVX* pReserveSpaceInfo) const;
 virtual VkResult			createIndirectCommandsLayoutNVX				(VkDevice device, const VkIndirectCommandsLayoutCreateInfoNVX* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkIndirectCommandsLayoutNVX* pIndirectCommandsLayout) const;
@@ -198,5 +200,6 @@ virtual VkResult			createValidationCacheEXT					(VkDevice device, const VkValida
 virtual void				destroyValidationCacheEXT					(VkDevice device, VkValidationCacheEXT validationCache, const VkAllocationCallbacks* pAllocator) const;
 virtual VkResult			mergeValidationCachesEXT					(VkDevice device, VkValidationCacheEXT dstCache, deUint32 srcCacheCount, const VkValidationCacheEXT* pSrcCaches) const;
 virtual VkResult			getValidationCacheDataEXT					(VkDevice device, VkValidationCacheEXT validationCache, deUintptr* pDataSize, void* pData) const;
+virtual VkResult			getMemoryHostPointerPropertiesEXT			(VkDevice device, VkExternalMemoryHandleTypeFlagBits handleType, const void* pHostPointer, VkMemoryHostPointerPropertiesEXT* pMemoryHostPointerProperties) const;
 virtual VkResult			getAndroidHardwareBufferPropertiesANDROID	(VkDevice device, const struct pt::AndroidHardwareBufferPtr buffer, VkAndroidHardwareBufferPropertiesANDROID* pProperties) const;
 virtual VkResult			getMemoryAndroidHardwareBufferANDROID		(VkDevice device, const VkMemoryGetAndroidHardwareBufferInfoANDROID* pInfo, struct pt::AndroidHardwareBufferPtr* pBuffer) const;

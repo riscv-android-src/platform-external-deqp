@@ -265,6 +265,8 @@ typedef VKAPI_ATTR void					(VKAPI_CALL* CmdDrawIndexedIndirectCountKHRFunc)				
 typedef VKAPI_ATTR VkResult				(VKAPI_CALL* GetPhysicalDeviceExternalImageFormatPropertiesNVFunc)	(VkPhysicalDevice physicalDevice, VkFormat format, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage, VkImageCreateFlags flags, VkExternalMemoryHandleTypeFlagsNV externalHandleType, VkExternalImageFormatPropertiesNV* pExternalImageFormatProperties);
 typedef VKAPI_ATTR VkResult				(VKAPI_CALL* GetMemoryWin32HandleNVFunc)							(VkDevice device, VkDeviceMemory memory, VkExternalMemoryHandleTypeFlagsNV handleType, pt::Win32Handle* pHandle);
 typedef VKAPI_ATTR VkResult				(VKAPI_CALL* CreateViSurfaceNNFunc)									(VkInstance instance, const VkViSurfaceCreateInfoNN* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
+typedef VKAPI_ATTR void					(VKAPI_CALL* CmdBeginConditionalRenderingEXTFunc)					(VkCommandBuffer commandBuffer, const VkConditionalRenderingBeginInfoEXT* pConditionalRenderingBegin);
+typedef VKAPI_ATTR void					(VKAPI_CALL* CmdEndConditionalRenderingEXTFunc)						(VkCommandBuffer commandBuffer);
 typedef VKAPI_ATTR void					(VKAPI_CALL* CmdProcessCommandsNVXFunc)								(VkCommandBuffer commandBuffer, const VkCmdProcessCommandsInfoNVX* pProcessCommandsInfo);
 typedef VKAPI_ATTR void					(VKAPI_CALL* CmdReserveSpaceForCommandsNVXFunc)						(VkCommandBuffer commandBuffer, const VkCmdReserveSpaceForCommandsInfoNVX* pReserveSpaceInfo);
 typedef VKAPI_ATTR VkResult				(VKAPI_CALL* CreateIndirectCommandsLayoutNVXFunc)					(VkDevice device, const VkIndirectCommandsLayoutCreateInfoNVX* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkIndirectCommandsLayoutNVX* pIndirectCommandsLayout);
@@ -295,5 +297,6 @@ typedef VKAPI_ATTR VkResult				(VKAPI_CALL* CreateValidationCacheEXTFunc)							
 typedef VKAPI_ATTR void					(VKAPI_CALL* DestroyValidationCacheEXTFunc)							(VkDevice device, VkValidationCacheEXT validationCache, const VkAllocationCallbacks* pAllocator);
 typedef VKAPI_ATTR VkResult				(VKAPI_CALL* MergeValidationCachesEXTFunc)							(VkDevice device, VkValidationCacheEXT dstCache, deUint32 srcCacheCount, const VkValidationCacheEXT* pSrcCaches);
 typedef VKAPI_ATTR VkResult				(VKAPI_CALL* GetValidationCacheDataEXTFunc)							(VkDevice device, VkValidationCacheEXT validationCache, deUintptr* pDataSize, void* pData);
+typedef VKAPI_ATTR VkResult				(VKAPI_CALL* GetMemoryHostPointerPropertiesEXTFunc)					(VkDevice device, VkExternalMemoryHandleTypeFlagBits handleType, const void* pHostPointer, VkMemoryHostPointerPropertiesEXT* pMemoryHostPointerProperties);
 typedef VKAPI_ATTR VkResult				(VKAPI_CALL* GetAndroidHardwareBufferPropertiesANDROIDFunc)			(VkDevice device, const struct pt::AndroidHardwareBufferPtr buffer, VkAndroidHardwareBufferPropertiesANDROID* pProperties);
 typedef VKAPI_ATTR VkResult				(VKAPI_CALL* GetMemoryAndroidHardwareBufferANDROIDFunc)				(VkDevice device, const VkMemoryGetAndroidHardwareBufferInfoANDROID* pInfo, struct pt::AndroidHardwareBufferPtr* pBuffer);

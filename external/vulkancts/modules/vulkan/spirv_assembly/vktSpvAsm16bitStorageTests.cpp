@@ -21,16 +21,6 @@
  * \brief SPIR-V Assembly Tests for the VK_KHR_16bit_storage
  *//*--------------------------------------------------------------------*/
 
-// VK_KHR_16bit_storage
-//
-// \todo [2017-02-08 antiagainst] Additional corner cases to check:
-//
-// * Test {StorageInputOutput16} 16-to-16 one value to two:
-//     Like the current 16-to-16 tests, but write X16 to two different output variables.
-//     (Checks that the 16-bit intermediate value can be used twice.)
-//     Note: The current framework allows only one interface to be used.
-//     Maybe the best solution is to add custom shaders that manually use two interfaces.
-
 #include "vktSpvAsm16bitStorageTests.hpp"
 
 #include "tcuFloat.hpp"
@@ -140,6 +130,22 @@ static const Capability	CAPABILITIES[]	=
 };
 
 static const StructTestData structData = {7, 11};
+
+enum TestDefDataType
+{
+	DATATYPE_FLOAT,
+	DATATYPE_VEC2,
+	DATATYPE_INT,
+	DATATYPE_UINT,
+	DATATYPE_IVEC2,
+	DATATYPE_UVEC2
+};
+
+struct TestDefinition
+{
+	InstanceContext	instanceContext;
+	TestDefDataType	dataType;
+};
 
 VulkanFeatures	get16BitStorageFeatures	(const char* cap)
 {
@@ -288,7 +294,7 @@ bool computeCheck16BitFloats (const std::vector<Resource>&	originalFloats,
 
 template<RoundingModeFlags RoundingMode>
 bool computeCheck16BitFloats64 (const std::vector<Resource>&	originalFloats,
-								const vector<AllocationSp>&	outputAllocs,
+								const vector<AllocationSp>&		outputAllocs,
 								const std::vector<Resource>&	/* expectedOutputs */,
 								tcu::TestLog&					log)
 {
@@ -368,305 +374,6 @@ bool check32BitFloats (const std::vector<Resource>&		/* originalFloats */,
 	}
 
 	return true;
-}
-
-// Generate and return 32-bit integers.
-//
-// Expected count to be at least 16.
-vector<deInt32> getInt32s (de::Random& rnd, const deUint32 count)
-{
-	vector<deInt32>		data;
-
-	data.reserve(count);
-
-	// Make sure we have boundary numbers.
-	data.push_back(deInt32(0x00000000));  // 0
-	data.push_back(deInt32(0x00000001));  // 1
-	data.push_back(deInt32(0x0000002a));  // 42
-	data.push_back(deInt32(0x00007fff));  // 32767
-	data.push_back(deInt32(0x00008000));  // 32768
-	data.push_back(deInt32(0x0000ffff));  // 65535
-	data.push_back(deInt32(0x00010000));  // 65536
-	data.push_back(deInt32(0x7fffffff));  // 2147483647
-	data.push_back(deInt32(0x80000000));  // -2147483648
-	data.push_back(deInt32(0x80000001));  // -2147483647
-	data.push_back(deInt32(0xffff0000));  // -65536
-	data.push_back(deInt32(0xffff0001));  // -65535
-	data.push_back(deInt32(0xffff8000));  // -32768
-	data.push_back(deInt32(0xffff8001));  // -32767
-	data.push_back(deInt32(0xffffffd6));  // -42
-	data.push_back(deInt32(0xffffffff));  // -1
-
-	DE_ASSERT(count >= data.size());
-
-	for (deUint32 numNdx = static_cast<deUint32>(data.size()); numNdx < count; ++numNdx)
-		data.push_back(static_cast<deInt32>(rnd.getUint32()));
-
-	return data;
-}
-
-// Generate and return 16-bit integers.
-//
-// Expected count to be at least 8.
-vector<deInt16> getInt16s (de::Random& rnd, const deUint32 count)
-{
-	vector<deInt16>		data;
-
-	data.reserve(count);
-
-	// Make sure we have boundary numbers.
-	data.push_back(deInt16(0x0000));  // 0
-	data.push_back(deInt16(0x0001));  // 1
-	data.push_back(deInt16(0x002a));  // 42
-	data.push_back(deInt16(0x7fff));  // 32767
-	data.push_back(deInt16(0x8000));  // -32868
-	data.push_back(deInt16(0x8001));  // -32767
-	data.push_back(deInt16(0xffd6));  // -42
-	data.push_back(deInt16(0xffff));  // -1
-
-	DE_ASSERT(count >= data.size());
-
-	for (deUint32 numNdx = static_cast<deUint32>(data.size()); numNdx < count; ++numNdx)
-		data.push_back(static_cast<deInt16>(rnd.getUint16()));
-
-	return data;
-}
-
-// IEEE-754 floating point numbers:
-// +--------+------+----------+-------------+ | binary | sign |
-// exponent | significand | +--------+------+----------+-------------+
-// | 16-bit | 1 |  5 | 10 | +--------+------+----------+-------------+
-// | 64-bit | 1 | 11 | 52 | +--------+------+----------+-------------+
-//
-// 16-bit floats:
-//
-// 0   000 00   00 0000 0001 (0x0001: 2e-24:         minimum positive denormalized)
-// 0   000 00   11 1111 1111 (0x03ff: 2e-14 - 2e-24: maximum positive denormalized)
-// 0   000 01   00 0000 0000 (0x0400: 2e-14:         minimum positive normalized)
-//
-// 32-bit floats:
-//
-// (0x3FD2000000000000: 0.28125: with exact match in 16-bit normalized)
-// (0x3F10060000000000: exact half way within two 16-bit normalized; round to zero: 0x0401)
-// (0xBF10060000000000: exact half way within two 16-bit normalized; round to zero: 0x8402)
-// (0x3F100C0000000000: not exact half way within two 16-bit normalized; round to zero: 0x0403)
-// (0xBF100C0000000000: not exact half way within two 16-bit normalized; round to zero: 0x8404)
-// Generate and return 64-bit floats
-//
-// The first 24 number pairs are manually picked, while the rest are randomly generated.
-// Expected count to be at least 24 (numPicks).
-
-vector<double> getFloat64s (de::Random& rnd, deUint32 count)
-{
-	vector<double>		float64;
-
-	float64.reserve(count);
-
-	if (count >= 24)
-	{
-		// Zero
-		float64.push_back(0.f);
-		float64.push_back(-0.f);
-		// Infinity
-		float64.push_back(std::numeric_limits<double>::infinity());
-		float64.push_back(-std::numeric_limits<double>::infinity());
-		// SNaN
-		float64.push_back(std::numeric_limits<double>::signaling_NaN());
-		float64.push_back(-std::numeric_limits<double>::signaling_NaN());
-		// QNaN
-		float64.push_back(std::numeric_limits<double>::quiet_NaN());
-		float64.push_back(-std::numeric_limits<double>::quiet_NaN());
-
-		// Denormalized 64-bit float matching 0 in 16-bit
-		float64.push_back(ldexp((double)1.f, -1023));
-		float64.push_back(-ldexp((double)1.f, -1023));
-
-		// Normalized 64-bit float matching 0 in 16-bit
-		float64.push_back(ldexp((double)1.f, -100));
-		float64.push_back(-ldexp((double)1.f, -100));
-		// Normalized 64-bit float with exact denormalized match in 16-bit
-		float64.push_back(bitwiseCast<double>(deUint64(0x3B0357C299A88EA8)));
-		float64.push_back(bitwiseCast<double>(deUint64(0xBB0357C299A88EA8)));
-
-		// Normalized 64-bit float with exact normalized match in 16-bit
-		float64.push_back(ldexp((double)1.f, -14));  // 2e-14: minimum 16-bit positive normalized
-		float64.push_back(-ldexp((double)1.f, -14)); // 2e-14: maximum 16-bit negative normalized
-		// Normalized 64-bit float falling above half way within two 16-bit normalized
-		float64.push_back(bitwiseCast<double>(deUint64(0x3FD2000000000000)));
-		float64.push_back(bitwiseCast<double>(deUint64(0xBFD2000000000000)));
-		// Normalized 64-bit float falling exact half way within two 16-bit normalized
-		float64.push_back(bitwiseCast<double>(deUint64(0x3F100C0000000000)));
-		float64.push_back(bitwiseCast<double>(deUint64(0xBF100C0000000000)));
-		// Some number
-		float64.push_back((double)0.28125f);
-		float64.push_back((double)-0.28125f);
-		// Normalized 64-bit float matching infinity in 16-bit
-		float64.push_back(ldexp((double)1.f, 100));
-		float64.push_back(-ldexp((double)1.f, 100));
-	}
-
-	const deUint32		numPicks	= static_cast<deUint32>(float64.size());
-
-	DE_ASSERT(count >= numPicks);
-	count -= numPicks;
-
-	for (deUint32 numNdx = 0; numNdx < count; ++numNdx)
-	{
-		double randValue = rnd.getDouble();
-		float64.push_back(randValue);
-	}
-
-	return float64;
-}
-
-// IEEE-754 floating point numbers:
-// +--------+------+----------+-------------+
-// | binary | sign | exponent | significand |
-// +--------+------+----------+-------------+
-// | 16-bit |  1   |    5     |     10      |
-// +--------+------+----------+-------------+
-// | 32-bit |  1   |    8     |     23      |
-// +--------+------+----------+-------------+
-//
-// 16-bit floats:
-//
-// 0   000 00   00 0000 0001 (0x0001: 2e-24:         minimum positive denormalized)
-// 0   000 00   11 1111 1111 (0x03ff: 2e-14 - 2e-24: maximum positive denormalized)
-// 0   000 01   00 0000 0000 (0x0400: 2e-14:         minimum positive normalized)
-//
-// 32-bit floats:
-//
-// 0   011 1110 1   001 0000 0000 0000 0000 0000 (0x3e900000: 0.28125: with exact match in 16-bit normalized)
-// 0   011 1000 1   000 0000 0011 0000 0000 0000 (0x38803000: exact half way within two 16-bit normalized; round to zero: 0x0401)
-// 1   011 1000 1   000 0000 0011 0000 0000 0000 (0xb8803000: exact half way within two 16-bit normalized; round to zero: 0x8402)
-// 0   011 1000 1   000 0000 1111 1111 0000 0000 (0x3880ff00: not exact half way within two 16-bit normalized; round to zero: 0x0403)
-// 1   011 1000 1   000 0000 1111 1111 0000 0000 (0xb880ff00: not exact half way within two 16-bit normalized; round to zero: 0x8404)
-
-// Generate and return 32-bit floats
-//
-// The first 24 number pairs are manually picked, while the rest are randomly generated.
-// Expected count to be at least 24 (numPicks).
-vector<float> getFloat32s (de::Random& rnd, deUint32 count)
-{
-	vector<float>		float32;
-
-	float32.reserve(count);
-
-	// Zero
-	float32.push_back(0.f);
-	float32.push_back(-0.f);
-	// Infinity
-	float32.push_back(std::numeric_limits<float>::infinity());
-	float32.push_back(-std::numeric_limits<float>::infinity());
-	// SNaN
-	float32.push_back(std::numeric_limits<float>::signaling_NaN());
-	float32.push_back(-std::numeric_limits<float>::signaling_NaN());
-	// QNaN
-	float32.push_back(std::numeric_limits<float>::quiet_NaN());
-	float32.push_back(-std::numeric_limits<float>::quiet_NaN());
-
-	// Denormalized 32-bit float matching 0 in 16-bit
-	float32.push_back(deFloatLdExp(1.f, -127));
-	float32.push_back(-deFloatLdExp(1.f, -127));
-
-	// Normalized 32-bit float matching 0 in 16-bit
-	float32.push_back(deFloatLdExp(1.f, -100));
-	float32.push_back(-deFloatLdExp(1.f, -100));
-	// Normalized 32-bit float with exact denormalized match in 16-bit
-	float32.push_back(deFloatLdExp(1.f, -24));  // 2e-24: minimum 16-bit positive denormalized
-	float32.push_back(-deFloatLdExp(1.f, -24)); // 2e-24: maximum 16-bit negative denormalized
-	// Normalized 32-bit float with exact normalized match in 16-bit
-	float32.push_back(deFloatLdExp(1.f, -14));  // 2e-14: minimum 16-bit positive normalized
-	float32.push_back(-deFloatLdExp(1.f, -14)); // 2e-14: maximum 16-bit negative normalized
-	// Normalized 32-bit float falling above half way within two 16-bit normalized
-	float32.push_back(bitwiseCast<float>(deUint32(0x3880ff00)));
-	float32.push_back(bitwiseCast<float>(deUint32(0xb880ff00)));
-	// Normalized 32-bit float falling exact half way within two 16-bit normalized
-	float32.push_back(bitwiseCast<float>(deUint32(0x38803000)));
-	float32.push_back(bitwiseCast<float>(deUint32(0xb8803000)));
-	// Some number
-	float32.push_back(0.28125f);
-	float32.push_back(-0.28125f);
-	// Normalized 32-bit float matching infinity in 16-bit
-	float32.push_back(deFloatLdExp(1.f, 100));
-	float32.push_back(-deFloatLdExp(1.f, 100));
-
-	const deUint32		numPicks	= static_cast<deUint32>(float32.size());
-
-	DE_ASSERT(count >= numPicks);
-	count -= numPicks;
-
-	for (deUint32 numNdx = 0; numNdx < count; ++numNdx)
-		float32.push_back(rnd.getFloat());
-
-	return float32;
-}
-
-// IEEE-754 floating point numbers:
-// +--------+------+----------+-------------+
-// | binary | sign | exponent | significand |
-// +--------+------+----------+-------------+
-// | 16-bit |  1   |    5     |     10      |
-// +--------+------+----------+-------------+
-// | 32-bit |  1   |    8     |     23      |
-// +--------+------+----------+-------------+
-//
-// 16-bit floats:
-//
-// 0   000 00   00 0000 0001 (0x0001: 2e-24:         minimum positive denormalized)
-// 0   000 00   11 1111 1111 (0x03ff: 2e-14 - 2e-24: maximum positive denormalized)
-// 0   000 01   00 0000 0000 (0x0400: 2e-14:         minimum positive normalized)
-//
-// 0   000 00   00 0000 0000 (0x0000: +0)
-// 0   111 11   00 0000 0000 (0x7c00: +Inf)
-// 0   000 00   11 1111 0000 (0x03f0: +Denorm)
-// 0   000 01   00 0000 0001 (0x0401: +Norm)
-// 0   111 11   00 0000 1111 (0x7c0f: +SNaN)
-// 0   111 11   00 1111 0000 (0x7c0f: +QNaN)
-
-
-// Generate and return 16-bit floats and their corresponding 32-bit values.
-//
-// The first 14 number pairs are manually picked, while the rest are randomly generated.
-// Expected count to be at least 14 (numPicks).
-vector<deFloat16> getFloat16s (de::Random& rnd, deUint32 count)
-{
-	vector<deFloat16>	float16;
-
-	float16.reserve(count);
-
-	// Zero
-	float16.push_back(deUint16(0x0000));
-	float16.push_back(deUint16(0x8000));
-	// Infinity
-	float16.push_back(deUint16(0x7c00));
-	float16.push_back(deUint16(0xfc00));
-	// SNaN
-	float16.push_back(deUint16(0x7c0f));
-	float16.push_back(deUint16(0xfc0f));
-	// QNaN
-	float16.push_back(deUint16(0x7cf0));
-	float16.push_back(deUint16(0xfcf0));
-
-	// Denormalized
-	float16.push_back(deUint16(0x03f0));
-	float16.push_back(deUint16(0x83f0));
-	// Normalized
-	float16.push_back(deUint16(0x0401));
-	float16.push_back(deUint16(0x8401));
-	// Some normal number
-	float16.push_back(deUint16(0x14cb));
-	float16.push_back(deUint16(0x94cb));
-
-	const deUint32		numPicks	= static_cast<deUint32>(float16.size());
-
-	DE_ASSERT(count >= numPicks);
-	count -= numPicks;
-
-	for (deUint32 numIdx = 0; numIdx < count; ++numIdx)
-		float16.push_back(rnd.getUint16());
-
-	return float16;
 }
 
 void addInfo(vector<bool>& info, int& ndx, const int count, bool isData)
@@ -4258,6 +3965,357 @@ void addGraphics16BitStorageInputOutputFloat16To16Group (tcu::TestCaseGroup* tes
 
 			createTestsForAllStages(testName, defaultColors, defaultColors, fragments, interfaces, extensions, testGroup, requiredFeatures);
 		}
+	}
+}
+
+void addShaderCode16BitStorageInputOutput16To16x2 (vk::SourceCollections& dst, TestDefinition def)
+{
+	SpirvVersion			targetSpirvVersion	= def.instanceContext.resources.spirvVersion;
+	const deUint32			vulkanVersion		= dst.usedVulkanVersion;
+	map<string, string>		spec;
+
+	switch(def.dataType)
+	{
+		case DATATYPE_FLOAT:
+			spec["type"]			= "f";
+			spec["convert"]			= "OpFConvert";
+			spec["scale"]			= "%x = OpCopyObject %f32 %dataIn0_converted\n%y = OpCopyObject %f32 %dataIn1_converted\n";
+			spec["colorConstruct"]	= "OpCompositeConstruct %v4f32 %x %y %c_f32_1 %c_f32_1";
+			spec["interpolation0"]	= spec["interpolation1"] = "";
+			break;
+
+		case DATATYPE_VEC2:
+			spec["type"]			= "v2f";
+			spec["convert"]			= "OpFConvert";
+			spec["scale"]			= "%xy = OpCopyObject %v2f32 %dataIn0_converted\n%zw = OpCopyObject %v2f32 %dataIn1_converted\n";
+			spec["colorConstruct"]	= "OpCompositeConstruct %v4f32 %xy %zw";
+			spec["interpolation0"]	= spec["interpolation1"] = "";
+			break;
+
+		case DATATYPE_INT:
+			spec["type"]			= "i";
+			spec["convert"]			= "OpSConvert";
+			spec["scale"]			= "%x_unscaled = OpConvertSToF %f32 %dataIn0_converted\n%x = OpFDiv %f32 %x_unscaled %scale_f32\n%y_unscaled = OpConvertSToF %f32 %dataIn1_converted\n%y = OpFDiv %f32 %y_unscaled %scale_f32\n";
+			spec["colorConstruct"]	= "OpCompositeConstruct %v4f32 %x %y %c_f32_1 %c_f32_1";
+			spec["interpolation0"]	= "OpDecorate %dataIn0 Flat";
+			spec["interpolation1"]	= "OpDecorate %dataIn1 Flat";
+			break;
+
+		case DATATYPE_UINT:
+			spec["type"]			= "u";
+			spec["convert"]			= "OpUConvert";
+			spec["scale"]			= "%x_unscaled = OpConvertUToF %f32 %dataIn0_converted\n%x = OpFDiv %f32 %x_unscaled %scale_f32\n%y_unscaled = OpConvertUToF %f32 %dataIn1_converted\n%y = OpFDiv %f32 %y_unscaled %scale_f32\n";
+			spec["colorConstruct"]	= "OpCompositeConstruct %v4f32 %x %y %c_f32_1 %c_f32_1";
+			spec["interpolation0"]	= "OpDecorate %dataIn0 Flat";
+			spec["interpolation1"]	= "OpDecorate %dataIn1 Flat";
+			break;
+
+		case DATATYPE_IVEC2:
+			spec["type"]			= "v2i";
+			spec["convert"]			= "OpSConvert";
+			spec["scale"]			= "%xy_unscaled = OpConvertSToF %v2f32 %dataIn0_converted\n%xy = OpFDiv %v2f32 %xy_unscaled %scale_v2f32\n%zw_unscaled = OpConvertSToF %v2f32 %dataIn1_converted\n%zw = OpFDiv %v2f32 %zw_unscaled %scale_v2f32\n";
+			spec["colorConstruct"]	= "OpCompositeConstruct %v4f32 %xy %zw";
+			spec["interpolation0"]	= "OpDecorate %dataIn0 Flat";
+			spec["interpolation1"]	= "OpDecorate %dataIn1 Flat";
+			break;
+
+		case DATATYPE_UVEC2:
+			spec["type"]			= "v2u";
+			spec["convert"]			= "OpUConvert";
+			spec["scale"]			= "%xy_unscaled = OpConvertUToF %v2f32 %dataIn0_converted\n%xy = OpFDiv %v2f32 %xy_unscaled %scale_v2f32\n%zw_unscaled = OpConvertUToF %v2f32 %dataIn1_converted\n%zw = OpFDiv %v2f32 %zw_unscaled %scale_v2f32\n";
+			spec["colorConstruct"]	= "OpCompositeConstruct %v4f32 %xy %zw";
+			spec["interpolation0"]	= "OpDecorate %dataIn0 Flat";
+			spec["interpolation1"]	= "OpDecorate %dataIn1 Flat";
+			break;
+
+		default:
+			DE_FATAL("Unexpected data type");
+			break;
+	};
+
+	// Read input data from binding 1, location 2. Should have value(s) of 0.5 in 16bit float or 32767 in 16bit int.
+	// Store the value to two outputs (dataOut0 and 1).
+	StringTemplate			vertexShader		(
+		"                             OpCapability Shader\n"
+		"                             OpCapability StorageInputOutput16\n"
+		"                             OpExtension \"SPV_KHR_16bit_storage\"\n"
+		"                        %1 = OpExtInstImport \"GLSL.std.450\"\n"
+		"                             OpMemoryModel Logical GLSL450\n"
+		"                             OpEntryPoint Vertex %main \"main\" %_ %position %vtxColor %dataIn %color %dataOut0 %dataOut1\n"
+		"                             OpSource GLSL 430\n"
+		"                             OpMemberDecorate %gl_PerVertex 0 BuiltIn Position\n"
+		"                             OpMemberDecorate %gl_PerVertex 1 BuiltIn PointSize\n"
+		"                             OpMemberDecorate %gl_PerVertex 2 BuiltIn ClipDistance\n"
+		"                             OpDecorate %gl_PerVertex Block\n"
+		"                             OpDecorate %position Location 0\n"
+		"                             OpDecorate %vtxColor Location 1\n"
+		"                             OpDecorate %dataIn Binding 1\n"
+		"                             OpDecorate %dataIn Location 2\n"
+		"                             OpDecorate %color Location 1\n"
+		"                             OpDecorate %dataOut0 Location 2\n"
+		"                             OpDecorate %dataOut1 Location 3\n"
+		"                     %void = OpTypeVoid\n"
+		"                %void_func = OpTypeFunction %void\n"
+		"                      %f32 = OpTypeFloat 32\n"
+		"                      %f16 = OpTypeFloat 16\n"
+		"                      %i32 = OpTypeInt 32 1\n"
+		"                      %i16 = OpTypeInt 16 1\n"
+		"                      %u32 = OpTypeInt 32 0\n"
+		"                      %u16 = OpTypeInt 16 0\n"
+		"                    %v4f32 = OpTypeVector %f32 4\n"
+		"                    %v2f32 = OpTypeVector %f32 2\n"
+		"                    %v2f16 = OpTypeVector %f16 2\n"
+		"                    %v2i32 = OpTypeVector %i32 2\n"
+		"                    %v2i16 = OpTypeVector %i16 2\n"
+		"                    %v2u32 = OpTypeVector %u32 2\n"
+		"                    %v2u16 = OpTypeVector %u16 2\n"
+		"                    %u32_0 = OpConstant %u32 0\n"
+		"                    %u32_1 = OpConstant %u32 1\n"
+		"           %_arr_f32_u32_1 = OpTypeArray %f32 %u32_1\n"
+		"             %gl_PerVertex = OpTypeStruct %v4f32 %f32 %_arr_f32_u32_1\n"
+		" %_ptr_Output_gl_PerVertex = OpTypePointer Output %gl_PerVertex\n"
+		"        %_ptr_Output_v4f32 = OpTypePointer Output %v4f32\n"
+		"    %_ptr_Output_${type}16 = OpTypePointer Output %${type}16\n"
+		"     %_ptr_Input_${type}16 = OpTypePointer Input %${type}16\n"
+		"         %_ptr_Input_v4f32 = OpTypePointer Input %v4f32\n"
+		"                        %_ = OpVariable %_ptr_Output_gl_PerVertex Output\n"
+		"                   %dataIn = OpVariable %_ptr_Input_${type}16 Input\n"
+		"                 %position = OpVariable %_ptr_Input_v4f32 Input\n"
+		"                    %color = OpVariable %_ptr_Input_v4f32 Input\n"
+		"                 %vtxColor = OpVariable %_ptr_Output_v4f32 Output\n"
+		"                 %dataOut0 = OpVariable %_ptr_Output_${type}16 Output\n"
+		"                 %dataOut1 = OpVariable %_ptr_Output_${type}16 Output\n"
+		"                     %main = OpFunction %void None %void_func\n"
+		"                    %entry = OpLabel\n"
+		"                  %posData = OpLoad %v4f32 %position\n"
+		"             %posOutputPtr = OpAccessChain %_ptr_Output_v4f32 %_ %u32_0\n"
+		"                             OpStore %posOutputPtr %posData\n"
+		"                %colorData = OpLoad %v4f32 %color\n"
+		"                             OpStore %vtxColor %colorData\n"
+		"                        %d = OpLoad %${type}16 %dataIn\n"
+		"                             OpStore %dataOut0 %d\n"
+		"                             OpStore %dataOut1 %d\n"
+		"                             OpReturn\n"
+		"                             OpFunctionEnd\n");
+
+	// Scalar:
+	// Read two 16bit values from vertex shader. Convert to 32bit and store as
+	// fragment color of (val0, val1, 1.0, 1.0). Val0 and 1 should equal to 0.5.
+	// Vector:
+	// Read two 16bit vec2s from vertex shader. Convert to 32bit and store as
+	// fragment color of (val0.x, val0.y, val1.x, val1.y). Val0 and 1 should equal to (0.5, 0.5).
+	StringTemplate			fragmentShader		(
+		"                             OpCapability Shader\n"
+		"                             OpCapability StorageInputOutput16\n"
+		"                             OpExtension \"SPV_KHR_16bit_storage\"\n"
+		"                        %1 = OpExtInstImport \"GLSL.std.450\"\n"
+		"                             OpMemoryModel Logical GLSL450\n"
+		"                             OpEntryPoint Fragment %main \"main\" %fragColor %dataOut %vtxColor %dataIn0 %dataIn1\n"
+		"                             OpExecutionMode %main OriginUpperLeft\n"
+		"                             OpSource GLSL 430\n"
+		"                             OpDecorate %vtxColor Location 1\n"
+		"                             OpDecorate %dataIn0 Location 2\n"
+		"                             OpDecorate %dataIn1 Location 3\n"
+		"                             ${interpolation0}\n"
+		"                             ${interpolation1}\n"
+		"                             OpDecorate %fragColor Location 0\n"
+		"                             OpDecorate %dataOut Location 1\n"
+		"                     %void = OpTypeVoid\n"
+		"                %void_func = OpTypeFunction %void\n"
+		"                      %f32 = OpTypeFloat 32\n"
+		"                      %f16 = OpTypeFloat 16\n"
+		"                      %i32 = OpTypeInt 32 1\n"
+		"                      %i16 = OpTypeInt 16 1\n"
+		"                      %u32 = OpTypeInt 32 0\n"
+		"                      %u16 = OpTypeInt 16 0\n"
+		"                    %v2f32 = OpTypeVector %f32 2\n"
+		"                    %v2f16 = OpTypeVector %f16 2\n"
+		"                    %v4f32 = OpTypeVector %f32 4\n"
+		"                    %v2i32 = OpTypeVector %i32 2\n"
+		"                    %v2i16 = OpTypeVector %i16 2\n"
+		"                    %v2u32 = OpTypeVector %u32 2\n"
+		"                    %v2u16 = OpTypeVector %u16 2\n"
+		"        %_ptr_Output_v4f32 = OpTypePointer Output %v4f32\n"
+		"    %_ptr_Output_${type}16 = OpTypePointer Output %${type}16\n"
+		"                %fragColor = OpVariable %_ptr_Output_v4f32 Output\n"
+		"                  %dataOut = OpVariable %_ptr_Output_${type}16 Output\n"
+		"     %_ptr_Input_${type}16 = OpTypePointer Input %${type}16\n"
+		"         %_ptr_Input_v4f32 = OpTypePointer Input %v4f32\n"
+		"                 %vtxColor = OpVariable %_ptr_Input_v4f32 Input\n"
+		"                  %dataIn0 = OpVariable %_ptr_Input_${type}16 Input\n"
+		"                  %dataIn1 = OpVariable %_ptr_Input_${type}16 Input\n"
+		"                  %c_f32_1 = OpConstant %f32 1\n"
+		"                %scale_f32 = OpConstant %f32 65534.0\n"
+		"              %scale_v2f32 = OpConstantComposite %v2f32 %scale_f32 %scale_f32\n"
+		"                     %main = OpFunction %void None %void_func\n"
+		"                    %entry = OpLabel\n"
+		"              %dataIn0_val = OpLoad %${type}16 %dataIn0\n"
+		"              %dataIn1_val = OpLoad %${type}16 %dataIn1\n"
+		"        %dataIn0_converted = ${convert} %${type}32 %dataIn0_val\n"
+		"        %dataIn1_converted = ${convert} %${type}32 %dataIn1_val\n"
+		"${scale}"
+		"                    %color = ${colorConstruct}\n"
+		"                             OpStore %fragColor %color\n"
+		"                             OpStore %dataOut %dataIn0_val\n"
+		"                             OpReturn\n"
+		"                             OpFunctionEnd\n");
+
+	dst.spirvAsmSources.add("vert", DE_NULL) << vertexShader.specialize(spec) << SpirVAsmBuildOptions(vulkanVersion, targetSpirvVersion);
+	dst.spirvAsmSources.add("frag", DE_NULL) << fragmentShader.specialize(spec) << SpirVAsmBuildOptions(vulkanVersion, targetSpirvVersion);
+}
+
+TestStatus runAndVerifyDefaultPipeline (Context& context, TestDefinition testDef)
+{
+	return runAndVerifyDefaultPipeline (context, testDef.instanceContext);
+}
+
+void addGraphics16BitStorageInputOutputFloat16To16x2Group (tcu::TestCaseGroup* testGroup)
+{
+	map<string, string>		fragments;
+	RGBA					defaultColors[4];
+	SpecConstants			noSpecConstants;
+	PushConstants			noPushConstants;
+	vector<string>			extensions;
+	map<string, string>		noFragments;
+	GraphicsResources		noResources;
+	StageToSpecConstantMap	specConstantMap;
+	VulkanFeatures			requiredFeatures;
+
+	const ShaderElement		pipelineStages[]		=
+	{
+		ShaderElement("vert", "main", VK_SHADER_STAGE_VERTEX_BIT),
+		ShaderElement("frag", "main", VK_SHADER_STAGE_FRAGMENT_BIT),
+	};
+
+	specConstantMap[VK_SHADER_STAGE_VERTEX_BIT]		= noSpecConstants;
+	specConstantMap[VK_SHADER_STAGE_FRAGMENT_BIT]	= noSpecConstants;
+
+	getDefaultColors(defaultColors);
+
+	extensions.push_back("VK_KHR_16bit_storage");
+	requiredFeatures.ext16BitStorage = EXT16BITSTORAGEFEATURES_INPUT_OUTPUT;
+
+	const struct
+	{
+		string			name;
+		deUint32		numElements;
+		TestDefDataType	dataType;
+		NumberType		numberType;
+		bool			isVector;
+	} cases[] =
+	{
+		{ "scalar",	1,	DATATYPE_FLOAT,	NUMBERTYPE_FLOAT16,	false	},
+		{ "vec2",	2,	DATATYPE_VEC2,	NUMBERTYPE_FLOAT16,	true	},
+	};
+
+	for (deUint32 caseIdx = 0; caseIdx < DE_LENGTH_OF_ARRAY(cases); ++caseIdx)
+	{
+		const RGBA				outColor			(128u, 128u, cases[caseIdx].isVector ? 128u : 255u, cases[caseIdx].isVector ? 128u : 255u);
+		RGBA					outputColors[4]		= {outColor, outColor, outColor, outColor};
+		vector<deFloat16>		float16Data			(4 * cases[caseIdx].numElements, deFloat32To16(0.5f));
+		GraphicsInterfaces		interfaces;
+
+		interfaces.setInputOutput(std::make_pair(IFDataType(cases[caseIdx].numElements, cases[caseIdx].numberType), BufferSp(new Float16Buffer(float16Data))),
+								  std::make_pair(IFDataType(cases[caseIdx].numElements, cases[caseIdx].numberType), BufferSp(new Float16Buffer(float16Data))));
+
+		const InstanceContext&	instanceContext		= createInstanceContext(pipelineStages,
+																			defaultColors,
+																			outputColors,
+																			noFragments,
+																			specConstantMap,
+																			noPushConstants,
+																			noResources,
+																			interfaces,
+																			extensions,
+																			requiredFeatures,
+																			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+																			QP_TEST_RESULT_FAIL,
+																			string());
+
+		TestDefinition	testDef						= {instanceContext, cases[caseIdx].dataType};
+
+		addFunctionCaseWithPrograms<TestDefinition>(testGroup,
+													cases[caseIdx].name,
+													"",
+													addShaderCode16BitStorageInputOutput16To16x2,
+													runAndVerifyDefaultPipeline,
+													testDef);
+	}
+}
+
+void addGraphics16BitStorageInputOutputInt16To16x2Group (tcu::TestCaseGroup* testGroup)
+{
+	map<string, string>		fragments;
+	RGBA					defaultColors[4];
+	SpecConstants			noSpecConstants;
+	PushConstants			noPushConstants;
+	vector<string>			extensions;
+	map<string, string>		noFragments;
+	GraphicsResources		noResources;
+	StageToSpecConstantMap	specConstantMap;
+	VulkanFeatures			requiredFeatures;
+
+	const ShaderElement		pipelineStages[]		=
+	{
+		ShaderElement("vert", "main", VK_SHADER_STAGE_VERTEX_BIT),
+		ShaderElement("frag", "main", VK_SHADER_STAGE_FRAGMENT_BIT),
+	};
+
+	specConstantMap[VK_SHADER_STAGE_VERTEX_BIT]		= noSpecConstants;
+	specConstantMap[VK_SHADER_STAGE_FRAGMENT_BIT]	= noSpecConstants;
+
+	getDefaultColors(defaultColors);
+
+	extensions.push_back("VK_KHR_16bit_storage");
+	requiredFeatures.ext16BitStorage = EXT16BITSTORAGEFEATURES_INPUT_OUTPUT;
+
+	const struct
+	{
+		string			name;
+		deUint32		numElements;
+		TestDefDataType	dataType;
+		NumberType		numberType;
+		bool			isVector;
+	} cases[] =
+	{
+		{ "scalar_int",		1,	DATATYPE_INT,	NUMBERTYPE_INT16,	false	},
+		{ "scalar_uint",	1,	DATATYPE_UINT,	NUMBERTYPE_UINT16,	false	},
+		{ "ivec2",			2,	DATATYPE_IVEC2,	NUMBERTYPE_INT16,	true	},
+		{ "uvec2",			2,	DATATYPE_UVEC2,	NUMBERTYPE_UINT16,	true	}
+	};
+
+	for (deUint32 caseIdx = 0; caseIdx < DE_LENGTH_OF_ARRAY(cases); ++caseIdx)
+	{
+		const RGBA				outColor			(128u, 128u, cases[caseIdx].isVector ? 128u : 255u, cases[caseIdx].isVector ? 128u : 255u);
+		RGBA					outputColors[4]		= {outColor, outColor, outColor, outColor};
+		vector<deInt16>			int16Data			(4 * cases[caseIdx].numElements, 32767);
+		GraphicsInterfaces		interfaces;
+
+		interfaces.setInputOutput(std::make_pair(IFDataType(cases[caseIdx].numElements, cases[caseIdx].numberType), BufferSp(new Int16Buffer(int16Data))),
+								  std::make_pair(IFDataType(cases[caseIdx].numElements, cases[caseIdx].numberType), BufferSp(new Int16Buffer(int16Data))));
+
+		const InstanceContext&	instanceContext		= createInstanceContext(pipelineStages,
+																			defaultColors,
+																			outputColors,
+																			noFragments,
+																			specConstantMap,
+																			noPushConstants,
+																			noResources,
+																			interfaces,
+																			extensions,
+																			requiredFeatures,
+																			VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+																			QP_TEST_RESULT_FAIL,
+																			string());
+
+		TestDefinition	testDef						= {instanceContext, cases[caseIdx].dataType};
+
+		addFunctionCaseWithPrograms<TestDefinition>(testGroup,
+													cases[caseIdx].name,
+													"",
+													addShaderCode16BitStorageInputOutput16To16x2,
+													runAndVerifyDefaultPipeline,
+													testDef);
 	}
 }
 
@@ -8470,6 +8528,8 @@ tcu::TestCaseGroup* create16BitStorageGraphicsGroup (tcu::TestContext& testCtx)
 	addTestGroup(group.get(), "input_output_float_16_to_32", "16-bit floats into 32-bit tests under capability StorageInputOutput16", addGraphics16BitStorageInputOutputFloat16To32Group);
 	addTestGroup(group.get(), "input_output_float_16_to_16", "16-bit floats pass-through tests under capability StorageInputOutput16", addGraphics16BitStorageInputOutputFloat16To16Group);
 	addTestGroup(group.get(), "input_output_float_16_to_64", "16-bit floats into 64-bit tests under capability StorageInputOutput16", addGraphics16BitStorageInputOutputFloat16To64Group);
+	addTestGroup(group.get(), "input_output_float_16_to_16x2", "16-bit floats pass-through to two outputs tests under capability StorageInputOutput16", addGraphics16BitStorageInputOutputFloat16To16x2Group);
+	addTestGroup(group.get(), "input_output_int_16_to_16x2", "16-bit ints pass-through to two outputs tests under capability StorageInputOutput16", addGraphics16BitStorageInputOutputInt16To16x2Group);
 	addTestGroup(group.get(), "input_output_int_32_to_16", "32-bit int into 16-bit tests under capability StorageInputOutput16", addGraphics16BitStorageInputOutputInt32To16Group);
 	addTestGroup(group.get(), "input_output_int_16_to_32", "16-bit int into 32-bit tests under capability StorageInputOutput16", addGraphics16BitStorageInputOutputInt16To32Group);
 	addTestGroup(group.get(), "input_output_int_16_to_16", "16-bit int into 16-bit tests under capability StorageInputOutput16", addGraphics16BitStorageInputOutputInt16To16Group);

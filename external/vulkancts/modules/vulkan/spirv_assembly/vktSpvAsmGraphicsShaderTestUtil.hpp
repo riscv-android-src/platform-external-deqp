@@ -266,7 +266,6 @@ struct InstanceContext
 	bool									hasTessellation;
 	vk::VkShaderStageFlagBits				requiredStages;
 	std::vector<std::string>				requiredDeviceExtensions;
-	std::vector<std::string>				requiredDeviceFeatures;
 	VulkanFeatures							requestedFeatures;
 	PushConstants							pushConstants;
 	// Specifies the (one or more) stages that use a customized shader code.
@@ -295,7 +294,6 @@ struct InstanceContext
 					 const GraphicsResources&					resources_,
 					 const GraphicsInterfaces&					interfaces_,
 					 const std::vector<std::string>&			extensions_,
-					 const std::vector<std::string>&			features_,
 					 VulkanFeatures								vulkanFeatures_,
 					 VkShaderStageFlags							customizedStages_);
 
@@ -327,20 +325,9 @@ const std::string numberToString (T number)
 	return ss.str();
 }
 
-// Performs a bitwise copy of source to the destination type Dest.
-template <typename Dest, typename Src>
-Dest bitwiseCast (Src source)
-{
-  Dest dest;
-  DE_STATIC_ASSERT(sizeof(source) == sizeof(dest));
-  deMemcpy(&dest, &source, sizeof(dest));
-  return dest;
-}
-
 template<typename T>	T			randomScalar	(de::Random& rnd, T minValue, T maxValue);
 template<> inline		float		randomScalar	(de::Random& rnd, float minValue, float maxValue)		{ return rnd.getFloat(minValue, maxValue);	}
 template<> inline		deInt32		randomScalar	(de::Random& rnd, deInt32 minValue, deInt32 maxValue)	{ return rnd.getInt(minValue, maxValue);	}
-
 
 void getDefaultColors (tcu::RGBA (&colors)[4]);
 
@@ -351,7 +338,8 @@ void getInvertedDefaultColors (tcu::RGBA (&colors)[4]);
 // Creates fragments that specialize into a simple pass-through shader (of any kind).
 std::map<std::string, std::string> passthruFragments (void);
 
-void createCombinedModule (vk::SourceCollections& dst, InstanceContext);
+// Creates a combined shader module based on VkShaderStageFlagBits defined in InstanceContext
+void createCombinedModule (vk::SourceCollections& dst, InstanceContext ctx);
 
 // This has two shaders of each stage. The first
 // is a passthrough, the second inverts the color.
@@ -370,13 +358,12 @@ InstanceContext createInstanceContext (const ShaderElement							(&elements)[N],
 									   const GraphicsResources&						resources,
 									   const GraphicsInterfaces&					interfaces,
 									   const std::vector<std::string>&				extensions,
-									   const std::vector<std::string>&				features,
 									   VulkanFeatures								vulkanFeatures,
 									   VkShaderStageFlags							customizedStages,
 									   const qpTestResult							failResult			= QP_TEST_RESULT_FAIL,
 									   const std::string&							failMessageTemplate	= std::string())
 {
-	InstanceContext ctx (inputColors, outputColors, testCodeFragments, specConstants, pushConstants, resources, interfaces, extensions, features, vulkanFeatures, customizedStages);
+	InstanceContext ctx (inputColors, outputColors, testCodeFragments, specConstants, pushConstants, resources, interfaces, extensions, vulkanFeatures, customizedStages);
 	for (size_t i = 0; i < N; ++i)
 	{
 		ctx.moduleMap[elements[i].moduleName].push_back(std::make_pair(elements[i].entryName, elements[i].stage));
@@ -397,7 +384,7 @@ inline InstanceContext createInstanceContext (const ShaderElement						(&element
 {
 	return createInstanceContext(elements, inputColors, outputColors, testCodeFragments,
 								 StageToSpecConstantMap(), PushConstants(), GraphicsResources(),
-								 GraphicsInterfaces(), std::vector<std::string>(), std::vector<std::string>(),
+								 GraphicsInterfaces(), std::vector<std::string>(),
 								 VulkanFeatures(), vk::VK_SHADER_STAGE_ALL);
 }
 
@@ -427,7 +414,6 @@ void createTestForStage (vk::VkShaderStageFlagBits					stage,
 						 const GraphicsResources&					resources,
 						 const GraphicsInterfaces&					interfaces,
 						 const std::vector<std::string>&			extensions,
-						 const std::vector<std::string>&			features,
 						 VulkanFeatures								vulkanFeatures,
 						 tcu::TestCaseGroup*						tests,
 						 const qpTestResult							failResult			= QP_TEST_RESULT_FAIL,
@@ -443,7 +429,6 @@ void createTestsForAllStages (const std::string&						name,
 							  const GraphicsResources&					resources,
 							  const GraphicsInterfaces&					interfaces,
 							  const std::vector<std::string>&			extensions,
-							  const std::vector<std::string>&			features,
 							  VulkanFeatures							vulkanFeatures,
 							  tcu::TestCaseGroup*						tests,
 							  const qpTestResult						failResult			= QP_TEST_RESULT_FAIL,
@@ -462,11 +447,10 @@ inline void createTestsForAllStages (const std::string&							name,
 	GraphicsResources			noResources;
 	GraphicsInterfaces			noInterfaces;
 	std::vector<std::string>	noExtensions;
-	std::vector<std::string>	noFeatures;
 
 	createTestsForAllStages(
 			name, inputColors, outputColors, testCodeFragments, noSpecConstants, noPushConstants,
-			noResources, noInterfaces, noExtensions, noFeatures, VulkanFeatures(),
+			noResources, noInterfaces, noExtensions, VulkanFeatures(),
 			tests, failResult, failMessageTemplate);
 }
 
@@ -483,11 +467,10 @@ inline void createTestsForAllStages (const std::string&							name,
 	GraphicsResources				noResources;
 	GraphicsInterfaces				noInterfaces;
 	std::vector<std::string>		noExtensions;
-	std::vector<std::string>		noFeatures;
 
 	createTestsForAllStages(
 			name, inputColors, outputColors, testCodeFragments, specConstants, noPushConstants,
-			noResources, noInterfaces, noExtensions, noFeatures, VulkanFeatures(),
+			noResources, noInterfaces, noExtensions, VulkanFeatures(),
 			tests, failResult, failMessageTemplate);
 }
 
@@ -505,33 +488,10 @@ inline void createTestsForAllStages (const std::string&							name,
 	SpecConstants				noSpecConstants;
 	PushConstants				noPushConstants;
 	GraphicsInterfaces			noInterfaces;
-	std::vector<std::string>	noFeatures;
 
 	createTestsForAllStages(
 			name, inputColors, outputColors, testCodeFragments, noSpecConstants, noPushConstants,
-			resources, noInterfaces, extensions, noFeatures, vulkanFeatures,
-			tests, failResult, failMessageTemplate);
-}
-
-inline void createTestsForAllStages (const std::string&							name,
-									 const tcu::RGBA							(&inputColors)[4],
-									 const tcu::RGBA							(&outputColors)[4],
-									 const std::map<std::string, std::string>&	testCodeFragments,
-									 const GraphicsResources&					resources,
-									 const std::vector<std::string>&			extensions,
-									 const std::vector<std::string>&			features,
-									 tcu::TestCaseGroup*						tests,
-									 VulkanFeatures								vulkanFeatures		= VulkanFeatures(),
-									 const qpTestResult							failResult			= QP_TEST_RESULT_FAIL,
-									 const std::string&							failMessageTemplate	= std::string())
-{
-	SpecConstants				noSpecConstants;
-	PushConstants				noPushConstants;
-	GraphicsInterfaces			noInterfaces;
-
-	createTestsForAllStages(
-			name, inputColors, outputColors, testCodeFragments, noSpecConstants, noPushConstants,
-			resources, noInterfaces, extensions, features, vulkanFeatures,
+			resources, noInterfaces, extensions, vulkanFeatures,
 			tests, failResult, failMessageTemplate);
 }
 
@@ -548,12 +508,11 @@ inline void createTestsForAllStages (const std::string& name,
 {
 	GraphicsResources			noResources;
 	SpecConstants				noSpecConstants;
-	std::vector<std::string>	noFeatures;
 	PushConstants				noPushConstants;
 
 	createTestsForAllStages(
 			name, inputColors, outputColors, testCodeFragments, noSpecConstants, noPushConstants,
-			noResources, interfaces, extensions, noFeatures, vulkanFeatures,
+			noResources, interfaces, extensions, vulkanFeatures,
 			tests, failResult, failMessageTemplate);
 }
 
@@ -571,11 +530,10 @@ inline void createTestsForAllStages (const std::string& name,
 {
 	SpecConstants					noSpecConstants;
 	GraphicsInterfaces				noInterfaces;
-	std::vector<std::string>		noFeatures;
 
 	createTestsForAllStages(
 			name, inputColors, outputColors, testCodeFragments, noSpecConstants, pushConstants,
-			resources, noInterfaces, extensions, noFeatures, vulkanFeatures,
+			resources, noInterfaces, extensions, vulkanFeatures,
 			tests, failResult, failMessageTemplate);
 }
 

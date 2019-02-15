@@ -856,6 +856,16 @@ template<> VkStructureType getStructureType<VkPhysicalDeviceFloatControlsPropert
 	return VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES_KHR;
 }
 
+template<> VkStructureType getStructureType<VkSubpassDescriptionDepthStencilResolveKHR> (void)
+{
+	return VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_DEPTH_STENCIL_RESOLVE_KHR;
+}
+
+template<> VkStructureType getStructureType<VkPhysicalDeviceDepthStencilResolvePropertiesKHR> (void)
+{
+	return VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_STENCIL_RESOLVE_PROPERTIES_KHR;
+}
+
 template<> VkStructureType getStructureType<VkDebugReportCallbackCreateInfoEXT> (void)
 {
 	return VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
@@ -934,6 +944,21 @@ template<> VkStructureType getStructureType<VkValidationFlagsEXT> (void)
 template<> VkStructureType getStructureType<VkViSurfaceCreateInfoNN> (void)
 {
 	return VK_STRUCTURE_TYPE_VI_SURFACE_CREATE_INFO_NN;
+}
+
+template<> VkStructureType getStructureType<VkConditionalRenderingBeginInfoEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_CONDITIONAL_RENDERING_BEGIN_INFO_EXT;
+}
+
+template<> VkStructureType getStructureType<VkPhysicalDeviceConditionalRenderingFeaturesEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONDITIONAL_RENDERING_FEATURES_EXT;
+}
+
+template<> VkStructureType getStructureType<VkCommandBufferInheritanceConditionalRenderingInfoEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_CONDITIONAL_RENDERING_INFO_EXT;
 }
 
 template<> VkStructureType getStructureType<VkDeviceGeneratedCommandsFeaturesNVX> (void)
@@ -1134,6 +1159,36 @@ template<> VkStructureType getStructureType<VkMemoryGetAndroidHardwareBufferInfo
 template<> VkStructureType getStructureType<VkExternalFormatANDROID> (void)
 {
 	return VK_STRUCTURE_TYPE_EXTERNAL_FORMAT_ANDROID;
+}
+
+template<> VkStructureType getStructureType<VkImportMemoryHostPointerInfoEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT;
+}
+
+template<> VkStructureType getStructureType<VkMemoryHostPointerPropertiesEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_MEMORY_HOST_POINTER_PROPERTIES_EXT;
+}
+
+template<> VkStructureType getStructureType<VkPhysicalDeviceExternalMemoryHostPropertiesEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_MEMORY_HOST_PROPERTIES_EXT;
+}
+
+template<> VkStructureType getStructureType<VkPhysicalDeviceVertexAttributeDivisorPropertiesEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_PROPERTIES_EXT;
+}
+
+template<> VkStructureType getStructureType<VkPipelineVertexInputDivisorStateCreateInfoEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_DIVISOR_STATE_CREATE_INFO_EXT;
+}
+
+template<> VkStructureType getStructureType<VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT> (void)
+{
+	return VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_FEATURES_EXT;
 }
 
 template<> VkStructureType getStructureType<VkDescriptorSetLayoutBindingFlagsCreateInfoEXT> (void)

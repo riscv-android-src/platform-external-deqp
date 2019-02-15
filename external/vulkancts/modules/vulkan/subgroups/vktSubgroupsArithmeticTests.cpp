@@ -64,72 +64,14 @@ enum OpType
 static bool checkVertexPipelineStages(std::vector<const void*> datas,
 									  deUint32 width, deUint32)
 {
-	const deUint32* data =
-		reinterpret_cast<const deUint32*>(datas[0]);
-	for (deUint32 x = 0; x < width; ++x)
-	{
-		deUint32 val = data[x];
-
-		if (0x3 != val)
-		{
-			return false;
-		}
-	}
-
-	return true;
+	return vkt::subgroups::check(datas, width, 0x3);
 }
 
 static bool checkCompute(std::vector<const void*> datas,
 						 const deUint32 numWorkgroups[3], const deUint32 localSize[3],
 						 deUint32)
 {
-	const deUint32* data =
-		reinterpret_cast<const deUint32*>(datas[0]);
-
-	for (deUint32 nX = 0; nX < numWorkgroups[0]; ++nX)
-	{
-		for (deUint32 nY = 0; nY < numWorkgroups[1]; ++nY)
-		{
-			for (deUint32 nZ = 0; nZ < numWorkgroups[2]; ++nZ)
-			{
-				for (deUint32 lX = 0; lX < localSize[0]; ++lX)
-				{
-					for (deUint32 lY = 0; lY < localSize[1]; ++lY)
-					{
-						for (deUint32 lZ = 0; lZ < localSize[2];
-								++lZ)
-						{
-							const deUint32 globalInvocationX =
-								nX * localSize[0] + lX;
-							const deUint32 globalInvocationY =
-								nY * localSize[1] + lY;
-							const deUint32 globalInvocationZ =
-								nZ * localSize[2] + lZ;
-
-							const deUint32 globalSizeX =
-								numWorkgroups[0] * localSize[0];
-							const deUint32 globalSizeY =
-								numWorkgroups[1] * localSize[1];
-
-							const deUint32 offset =
-								globalSizeX *
-								((globalSizeY *
-								  globalInvocationZ) +
-								 globalInvocationY) +
-								globalInvocationX;
-
-							if (0x3 != data[offset])
-							{
-								return false;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return true;
+	return vkt::subgroups::checkCompute(datas, numWorkgroups, localSize, 0x3);
 }
 
 std::string getOpTypeName(int opType)
@@ -993,8 +935,12 @@ namespace subgroups
 {
 tcu::TestCaseGroup* createSubgroupsArithmeticTests(tcu::TestContext& testCtx)
 {
-	de::MovePtr<tcu::TestCaseGroup> group(new tcu::TestCaseGroup(
-			testCtx, "arithmetic", "Subgroup arithmetic category tests"));
+	de::MovePtr<tcu::TestCaseGroup> graphicGroup(new tcu::TestCaseGroup(
+		testCtx, "graphics", "Subgroup arithmetic category tests: graphics"));
+	de::MovePtr<tcu::TestCaseGroup> computeGroup(new tcu::TestCaseGroup(
+		testCtx, "compute", "Subgroup arithmetic category tests: compute"));
+	de::MovePtr<tcu::TestCaseGroup> framebufferGroup(new tcu::TestCaseGroup(
+		testCtx, "framebuffer", "Subgroup arithmetic category tests: framebuffer"));
 
 	const VkShaderStageFlags stages[] =
 	{
@@ -1082,31 +1028,36 @@ tcu::TestCaseGroup* createSubgroupsArithmeticTests(tcu::TestContext& testCtx)
 
 			{
 				const CaseDefinition caseDef = {opTypeIndex, VK_SHADER_STAGE_COMPUTE_BIT, format};
-				addFunctionCaseWithPrograms(group.get(),
+				addFunctionCaseWithPrograms(computeGroup.get(),
 											de::toLower(op) + "_" +
-											subgroups::getFormatNameForGLSL(format) +
-											"_" + getShaderStageName(caseDef.shaderStage),
+											subgroups::getFormatNameForGLSL(format),
 											"", supportedCheck, initPrograms, test, caseDef);
 			}
 
 			{
 				const CaseDefinition caseDef = {opTypeIndex, VK_SHADER_STAGE_ALL_GRAPHICS, format};
-				addFunctionCaseWithPrograms(group.get(),
+				addFunctionCaseWithPrograms(graphicGroup.get(),
 											de::toLower(op) + "_" +
-											subgroups::getFormatNameForGLSL(format) +
-											"_graphic",
+											subgroups::getFormatNameForGLSL(format),
 											"", supportedCheck, initPrograms, test, caseDef);
 			}
 
 			for (int stageIndex = 0; stageIndex < DE_LENGTH_OF_ARRAY(stages); ++stageIndex)
 			{
 				const CaseDefinition caseDef = {opTypeIndex, stages[stageIndex], format};
-				addFunctionCaseWithPrograms(group.get(), de::toLower(op) + "_" + subgroups::getFormatNameForGLSL(format) +
-											"_" + getShaderStageName(caseDef.shaderStage) + "_framebuffer", "",
+				addFunctionCaseWithPrograms(framebufferGroup.get(), de::toLower(op) + "_" + subgroups::getFormatNameForGLSL(format) +
+											"_" + getShaderStageName(caseDef.shaderStage), "",
 											supportedCheck, initFrameBufferPrograms, noSSBOtest, caseDef);
 			}
 		}
 	}
+
+	de::MovePtr<tcu::TestCaseGroup> group(new tcu::TestCaseGroup(
+		testCtx, "arithmetic", "Subgroup arithmetic category tests"));
+
+	group->addChild(graphicGroup.release());
+	group->addChild(computeGroup.release());
+	group->addChild(framebufferGroup.release());
 
 	return group.release();
 }

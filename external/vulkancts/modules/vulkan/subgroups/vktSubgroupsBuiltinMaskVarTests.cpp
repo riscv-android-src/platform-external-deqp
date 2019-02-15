@@ -40,71 +40,14 @@ namespace subgroups
 static bool checkVertexPipelineStages(std::vector<const void*> datas,
 									  deUint32 width, deUint32)
 {
-	const deUint32* data =
-		reinterpret_cast<const deUint32*>(datas[0]);
-	for (deUint32 x = 0; x < width; ++x)
-	{
-		deUint32 val = data[x];
-
-		if (0x1 != val)
-		{
-			return false;
-		}
-	}
-
-	return true;
+	return check(datas, width, 1);
 }
 
-static bool checkCompute(std::vector<const void*> datas,
+static bool checkComputeStage(std::vector<const void*> datas,
 						 const deUint32 numWorkgroups[3], const deUint32 localSize[3],
 						 deUint32)
 {
-	const deUint32* data = reinterpret_cast<const deUint32*>(datas[0]);
-
-	for (deUint32 nX = 0; nX < numWorkgroups[0]; ++nX)
-	{
-		for (deUint32 nY = 0; nY < numWorkgroups[1]; ++nY)
-		{
-			for (deUint32 nZ = 0; nZ < numWorkgroups[2]; ++nZ)
-			{
-				for (deUint32 lX = 0; lX < localSize[0]; ++lX)
-				{
-					for (deUint32 lY = 0; lY < localSize[1]; ++lY)
-					{
-						for (deUint32 lZ = 0; lZ < localSize[2];
-								++lZ)
-						{
-							const deUint32 globalInvocationX =
-								nX * localSize[0] + lX;
-							const deUint32 globalInvocationY =
-								nY * localSize[1] + lY;
-							const deUint32 globalInvocationZ =
-								nZ * localSize[2] + lZ;
-
-							const deUint32 globalSizeX =
-								numWorkgroups[0] * localSize[0];
-							const deUint32 globalSizeY =
-								numWorkgroups[1] * localSize[1];
-
-							const deUint32 offset =
-								globalSizeX *
-								((globalSizeY *
-								  globalInvocationZ) +
-								 globalInvocationY) +
-								globalInvocationX;
-
-							if (0x1 != data[offset])
-							{
-								return false;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return true;
+	return checkCompute(datas, numWorkgroups, localSize, 1);
 }
 
 namespace
@@ -1443,7 +1386,7 @@ tcu::TestStatus test(Context& context, const CaseDefinition caseDef)
 						   "Shader stage " + getShaderStageName(caseDef.shaderStage) +
 						   " is required to support subgroup operations!");
 		}
-		return makeComputeTest(context, VK_FORMAT_R32_UINT, DE_NULL, 0, checkCompute);
+		return makeComputeTest(context, VK_FORMAT_R32_UINT, DE_NULL, 0, checkComputeStage);
 	}
 	else
 	{
@@ -1476,8 +1419,12 @@ tcu::TestStatus test(Context& context, const CaseDefinition caseDef)
 
 tcu::TestCaseGroup* createSubgroupsBuiltinMaskVarTests(tcu::TestContext& testCtx)
 {
-	de::MovePtr<tcu::TestCaseGroup> group(new tcu::TestCaseGroup(
-			testCtx, "builtin_mask_var", "Subgroup builtin mask variable tests"));
+de::MovePtr<tcu::TestCaseGroup> graphicGroup(new tcu::TestCaseGroup(
+		testCtx, "graphics", "Subgroup builtin mask category	tests: graphics"));
+	de::MovePtr<tcu::TestCaseGroup> computeGroup(new tcu::TestCaseGroup(
+		testCtx, "compute", "Subgroup builtin mask category tests: compute"));
+	de::MovePtr<tcu::TestCaseGroup> framebufferGroup(new tcu::TestCaseGroup(
+		testCtx, "framebuffer", "Subgroup builtin mask category tests: framebuffer"));
 
 	const char* const all_stages_vars[] =
 	{
@@ -1504,28 +1451,34 @@ tcu::TestCaseGroup* createSubgroupsBuiltinMaskVarTests(tcu::TestContext& testCtx
 
 		{
 			const CaseDefinition caseDef = {"gl_" + var, VK_SHADER_STAGE_ALL_GRAPHICS};
-			addFunctionCaseWithPrograms(group.get(),
-										varLower + "_graphic" , "",
+			addFunctionCaseWithPrograms(graphicGroup.get(),
+										varLower, "",
 										supportedCheck, initPrograms, test, caseDef);
 		}
 
 		{
 			const CaseDefinition caseDef = {"gl_" + var, VK_SHADER_STAGE_COMPUTE_BIT};
-			addFunctionCaseWithPrograms(group.get(),
-										varLower + "_" +
-										getShaderStageName(caseDef.shaderStage), "",
+			addFunctionCaseWithPrograms(computeGroup.get(),
+										varLower, "",
 										supportedCheck, initPrograms, test, caseDef);
 		}
 
 		for (int stageIndex = 0; stageIndex < DE_LENGTH_OF_ARRAY(stages); ++stageIndex)
 		{
 			const CaseDefinition caseDef = {"gl_" + var, stages[stageIndex]};
-			addFunctionCaseWithPrograms(group.get(),
+			addFunctionCaseWithPrograms(framebufferGroup.get(),
 						varLower + "_" +
-						getShaderStageName(caseDef.shaderStage)+"_framebuffer", "",
+						getShaderStageName(caseDef.shaderStage), "",
 						supportedCheck, initFrameBufferPrograms, noSSBOtest, caseDef);
 		}
 	}
+
+	de::MovePtr<tcu::TestCaseGroup> group(new tcu::TestCaseGroup(
+		testCtx, "builtin_mask_var", "Subgroup builtin mask variable tests"));
+
+	group->addChild(graphicGroup.release());
+	group->addChild(computeGroup.release());
+	group->addChild(framebufferGroup.release());
 
 	return group.release();
 }

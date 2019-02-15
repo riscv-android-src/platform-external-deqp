@@ -65,7 +65,7 @@ dEQP-VK.rasterization.flatshading.lines
 dEQP-VK.rasterization.flatshading.line_strip
 
 # b/120910310
-dEQP-VK.subgroups.vote.subgroupallequal_bool_compute
-dEQP-VK.subgroups.vote.subgroupallequal_bvec2_compute
-dEQP-VK.subgroups.vote.subgroupallequal_bvec3_compute
-dEQP-VK.subgroups.vote.subgroupallequal_bvec4_compute
+dEQP-VK.subgroups.vote.compute.subgroupallequal_bool
+dEQP-VK.subgroups.vote.compute.subgroupallequal_bvec2
+dEQP-VK.subgroups.vote.compute.subgroupallequal_bvec3
+dEQP-VK.subgroups.vote.compute.subgroupallequal_bvec4

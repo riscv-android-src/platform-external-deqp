@@ -260,7 +260,6 @@ InstanceContext::InstanceContext (const RGBA						(&inputs)[4],
 								  const GraphicsResources&			resources_,
 								  const GraphicsInterfaces&			interfaces_,
 								  const vector<string>&				extensions_,
-								  const vector<string>&				features_,
 								  VulkanFeatures					vulkanFeatures_,
 								  VkShaderStageFlags				customizedStages_)
 	: testCodeFragments				(testCodeFragments_)
@@ -268,7 +267,6 @@ InstanceContext::InstanceContext (const RGBA						(&inputs)[4],
 	, hasTessellation				(false)
 	, requiredStages				(static_cast<VkShaderStageFlagBits>(0))
 	, requiredDeviceExtensions		(extensions_)
-	, requiredDeviceFeatures		(features_)
 	, requestedFeatures				(vulkanFeatures_)
 	, pushConstants					(pushConsants_)
 	, customizedStages				(customizedStages_)
@@ -296,7 +294,6 @@ InstanceContext::InstanceContext (const InstanceContext& other)
 	, hasTessellation				(other.hasTessellation)
 	, requiredStages				(other.requiredStages)
 	, requiredDeviceExtensions		(other.requiredDeviceExtensions)
-	, requiredDeviceFeatures		(other.requiredDeviceFeatures)
 	, requestedFeatures				(other.requestedFeatures)
 	, pushConstants					(other.pushConstants)
 	, customizedStages				(other.customizedStages)
@@ -402,12 +399,11 @@ string makeVertexShaderAssembly (const map<string, string>& fragments)
 {
 	static const char vertexShaderBoilerplate[] =
 		"OpCapability Shader\n"
-		"OpCapability ClipDistance\n"
-		"OpCapability CullDistance\n"
 		"${capability:opt}\n"
 		"${extension:opt}\n"
 		"OpMemoryModel Logical GLSL450\n"
 		"OpEntryPoint Vertex %BP_main \"main\" %BP_stream %BP_position %BP_vtx_color %BP_color %BP_gl_VertexIndex %BP_gl_InstanceIndex ${IF_entrypoint:opt} \n"
+		"${execution_mode:opt}\n"
 		"${debug:opt}\n"
 		"${moduleprocessed:opt}\n"
 		"OpMemberDecorate %BP_gl_PerVertex 0 BuiltIn Position\n"
@@ -486,13 +482,12 @@ string makeTessControlShaderAssembly (const map<string, string>& fragments)
 {
 	static const char tessControlShaderBoilerplate[] =
 		"OpCapability Tessellation\n"
-		"OpCapability ClipDistance\n"
-		"OpCapability CullDistance\n"
 		"${capability:opt}\n"
 		"${extension:opt}\n"
 		"OpMemoryModel Logical GLSL450\n"
 		"OpEntryPoint TessellationControl %BP_main \"main\" %BP_out_color %BP_gl_InvocationID %BP_gl_PrimitiveID %BP_in_color %BP_gl_out %BP_gl_in %BP_gl_TessLevelOuter %BP_gl_TessLevelInner ${IF_entrypoint:opt} \n"
 		"OpExecutionMode %BP_main OutputVertices 3\n"
+		"${execution_mode:opt}\n"
 		"${debug:opt}\n"
 		"${moduleprocessed:opt}\n"
 		"OpDecorate %BP_out_color Location 1\n"
@@ -611,8 +606,6 @@ string makeTessEvalShaderAssembly (const map<string, string>& fragments)
 {
 	static const char tessEvalBoilerplate[] =
 		"OpCapability Tessellation\n"
-		"OpCapability ClipDistance\n"
-		"OpCapability CullDistance\n"
 		"${capability:opt}\n"
 		"${extension:opt}\n"
 		"OpMemoryModel Logical GLSL450\n"
@@ -620,6 +613,7 @@ string makeTessEvalShaderAssembly (const map<string, string>& fragments)
 		"OpExecutionMode %BP_main Triangles\n"
 		"OpExecutionMode %BP_main SpacingEqual\n"
 		"OpExecutionMode %BP_main VertexOrderCcw\n"
+		"${execution_mode:opt}\n"
 		"${debug:opt}\n"
 		"${moduleprocessed:opt}\n"
 		"OpMemberDecorate %BP_gl_PerVertexOut 0 BuiltIn Position\n"
@@ -761,8 +755,6 @@ string makeGeometryShaderAssembly (const map<string, string>& fragments)
 {
 	static const char geometryShaderBoilerplate[] =
 		"OpCapability Geometry\n"
-		"OpCapability ClipDistance\n"
-		"OpCapability CullDistance\n"
 		"${capability:opt}\n"
 		"${extension:opt}\n"
 		"OpMemoryModel Logical GLSL450\n"
@@ -770,6 +762,7 @@ string makeGeometryShaderAssembly (const map<string, string>& fragments)
 		"OpExecutionMode %BP_main Triangles\n"
 		"OpExecutionMode %BP_main OutputTriangleStrip\n"
 		"OpExecutionMode %BP_main OutputVertices 3\n"
+		"${execution_mode:opt}\n"
 		"${debug:opt}\n"
 		"${moduleprocessed:opt}\n"
 		"OpDecorate %BP_gl_PrimitiveID BuiltIn PrimitiveId\n"
@@ -889,6 +882,7 @@ string makeFragmentShaderAssembly (const map<string, string>& fragments)
 		"OpMemoryModel Logical GLSL450\n"
 		"OpEntryPoint Fragment %BP_main \"main\" %BP_vtxColor %BP_fragColor %BP_gl_FragCoord ${IF_entrypoint:opt} \n"
 		"OpExecutionMode %BP_main OriginUpperLeft\n"
+		"${execution_mode:opt}\n"
 		"${debug:opt}\n"
 		"${moduleprocessed:opt}\n"
 		"OpDecorate %BP_fragColor Location 0\n"
@@ -1024,6 +1018,7 @@ map<string, string> fillInterfacePlaceholderVert (void)
 	// Make sure the rest still need to be instantialized.
 	fragments["capability"]				= "${capability:opt}";
 	fragments["extension"]				= "${extension:opt}";
+	fragments["execution_mode"]			= "${execution_mode:opt}";
 	fragments["debug"]					= "${debug:opt}";
 	fragments["decoration"]				= "${decoration:opt}";
 	fragments["pre_main"]				= "${pre_main:opt}";
@@ -1060,6 +1055,7 @@ map<string, string> fillInterfacePlaceholderFrag (void)
 	// Make sure the rest still need to be instantialized.
 	fragments["capability"]				= "${capability:opt}";
 	fragments["extension"]				= "${extension:opt}";
+	fragments["execution_mode"]			= "${execution_mode:opt}";
 	fragments["debug"]					= "${debug:opt}";
 	fragments["decoration"]				= "${decoration:opt}";
 	fragments["pre_main"]				= "${pre_main:opt}";
@@ -1108,6 +1104,7 @@ map<string, string> fillInterfacePlaceholderTessCtrl (void)
 	// Make sure the rest still need to be instantialized.
 	fragments["capability"]					= "${capability:opt}";
 	fragments["extension"]					= "${extension:opt}";
+	fragments["execution_mode"]				= "${execution_mode:opt}";
 	fragments["debug"]						= "${debug:opt}";
 	fragments["decoration"]					= "${decoration:opt}";
 	fragments["decoration_tessc"]			= "${decoration_tessc:opt}";
@@ -1147,6 +1144,7 @@ map<string, string> fillInterfacePlaceholderTessEvalGeom (void)
 	// Make sure the rest still need to be instantialized.
 	fragments["capability"]					= "${capability:opt}";
 	fragments["extension"]					= "${extension:opt}";
+	fragments["execution_mode"]				= "${execution_mode:opt}";
 	fragments["debug"]						= "${debug:opt}";
 	fragments["decoration"]					= "${decoration:opt}";
 	fragments["pre_main"]					= "${pre_main:opt}";
@@ -1348,233 +1346,287 @@ void addShaderCodeCustomFragment (vk::SourceCollections& dst, InstanceContext co
 	addShaderCodeCustomFragment(dst, context, DE_NULL);
 }
 
-void createCombinedModule (vk::SourceCollections& dst, InstanceContext)
+void createCombinedModule (vk::SourceCollections& dst, InstanceContext ctx)
 {
-	// \todo [2015-12-07 awoloszyn] Make tessellation / geometry conditional
-	dst.spirvAsmSources.add("module") <<
-		"OpCapability Shader\n"
-		"OpCapability ClipDistance\n"
-		"OpCapability CullDistance\n"
-		"OpCapability Geometry\n"
-		"OpCapability Tessellation\n"
-		"OpMemoryModel Logical GLSL450\n"
+	const bool			useTessellation	(ctx.requiredStages & (VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT));
+	const bool			useGeometry		(ctx.requiredStages & VK_SHADER_STAGE_GEOMETRY_BIT);
+	std::stringstream	combinedModule;
+	std::stringstream	opCapabilities;
+	std::stringstream	opEntryPoints;
 
-		"OpEntryPoint Vertex %vert_main \"main\" %vert_Position %vert_vtxColor %vert_color %vert_vtxPosition %vert_vertex_id %vert_instance_id\n"
-		"OpEntryPoint Geometry %geom_main \"main\" %geom_out_gl_position %geom_gl_in %geom_out_color %geom_in_color\n"
-		"OpEntryPoint TessellationControl %tessc_main \"main\" %tessc_out_color %tessc_gl_InvocationID %tessc_in_color %tessc_out_position %tessc_in_position %tessc_gl_TessLevelOuter %tessc_gl_TessLevelInner\n"
-		"OpEntryPoint TessellationEvaluation %tesse_main \"main\" %tesse_stream %tesse_gl_tessCoord %tesse_in_position %tesse_out_color %tesse_in_color \n"
-		"OpEntryPoint Fragment %frag_main \"main\" %frag_vtxColor %frag_fragColor\n"
+	// opCapabilities
+	{
+		opCapabilities << "OpCapability Shader\n";
 
-		"OpExecutionMode %geom_main Triangles\n"
-		"OpExecutionMode %geom_main OutputTriangleStrip\n"
-		"OpExecutionMode %geom_main OutputVertices 3\n"
+		if (useGeometry)
+			opCapabilities << "OpCapability Geometry\n";
 
-		"OpExecutionMode %tessc_main OutputVertices 3\n"
+		if (useTessellation)
+			opCapabilities << "OpCapability Tessellation\n";
+	}
 
-		"OpExecutionMode %tesse_main Triangles\n"
-		"OpExecutionMode %tesse_main SpacingEqual\n"
-		"OpExecutionMode %tesse_main VertexOrderCcw\n"
+	// opEntryPoints
+	{
+		opEntryPoints << "OpEntryPoint Vertex %vert_main \"main\" %vert_Position %vert_vtxColor %vert_color %vert_vtxPosition %vert_vertex_id %vert_instance_id\n";
 
-		"OpExecutionMode %frag_main OriginUpperLeft\n"
+		if (useGeometry)
+			opEntryPoints << "OpEntryPoint Geometry %geom_main \"main\" %geom_out_gl_position %geom_gl_in %geom_out_color %geom_in_color\n";
 
-		"; Vertex decorations\n"
-		"OpDecorate %vert_vtxPosition Location 2\n"
-		"OpDecorate %vert_Position Location 0\n"
-		"OpDecorate %vert_vtxColor Location 1\n"
-		"OpDecorate %vert_color Location 1\n"
-		"OpDecorate %vert_vertex_id BuiltIn VertexIndex\n"
-		"OpDecorate %vert_instance_id BuiltIn InstanceIndex\n"
+		if (useTessellation)
+		{
+			opEntryPoints <<	"OpEntryPoint TessellationControl %tessc_main \"main\" %tessc_out_color %tessc_gl_InvocationID %tessc_in_color %tessc_out_position %tessc_in_position %tessc_gl_TessLevelOuter %tessc_gl_TessLevelInner\n"
+								"OpEntryPoint TessellationEvaluation %tesse_main \"main\" %tesse_stream %tesse_gl_tessCoord %tesse_in_position %tesse_out_color %tesse_in_color \n";
+		}
 
-		"; Geometry decorations\n"
-		"OpDecorate %geom_out_gl_position BuiltIn Position\n"
-		"OpMemberDecorate %geom_per_vertex_in 0 BuiltIn Position\n"
-		"OpMemberDecorate %geom_per_vertex_in 1 BuiltIn PointSize\n"
-		"OpMemberDecorate %geom_per_vertex_in 2 BuiltIn ClipDistance\n"
-		"OpMemberDecorate %geom_per_vertex_in 3 BuiltIn CullDistance\n"
-		"OpDecorate %geom_per_vertex_in Block\n"
-		"OpDecorate %geom_out_color Location 1\n"
-		"OpDecorate %geom_in_color Location 1\n"
+		opEntryPoints << "OpEntryPoint Fragment %frag_main \"main\" %frag_vtxColor %frag_fragColor\n";
+	}
 
-		"; Tessellation Control decorations\n"
-		"OpDecorate %tessc_out_color Location 1\n"
-		"OpDecorate %tessc_gl_InvocationID BuiltIn InvocationId\n"
-		"OpDecorate %tessc_in_color Location 1\n"
-		"OpDecorate %tessc_out_position Location 2\n"
-		"OpDecorate %tessc_in_position Location 2\n"
-		"OpDecorate %tessc_gl_TessLevelOuter Patch\n"
-		"OpDecorate %tessc_gl_TessLevelOuter BuiltIn TessLevelOuter\n"
-		"OpDecorate %tessc_gl_TessLevelInner Patch\n"
-		"OpDecorate %tessc_gl_TessLevelInner BuiltIn TessLevelInner\n"
+	combinedModule	<<	opCapabilities.str()
+					<<	"OpMemoryModel Logical GLSL450\n"
+					<<	opEntryPoints.str();
 
-		"; Tessellation Evaluation decorations\n"
-		"OpMemberDecorate %tesse_per_vertex_out 0 BuiltIn Position\n"
-		"OpMemberDecorate %tesse_per_vertex_out 1 BuiltIn PointSize\n"
-		"OpMemberDecorate %tesse_per_vertex_out 2 BuiltIn ClipDistance\n"
-		"OpMemberDecorate %tesse_per_vertex_out 3 BuiltIn CullDistance\n"
-		"OpDecorate %tesse_per_vertex_out Block\n"
-		"OpDecorate %tesse_gl_tessCoord BuiltIn TessCoord\n"
-		"OpDecorate %tesse_in_position Location 2\n"
-		"OpDecorate %tesse_out_color Location 1\n"
-		"OpDecorate %tesse_in_color Location 1\n"
+	if (useGeometry)
+	{
+		combinedModule <<	"OpExecutionMode %geom_main Triangles\n"
+							"OpExecutionMode %geom_main OutputTriangleStrip\n"
+							"OpExecutionMode %geom_main OutputVertices 3\n";
+	}
 
-		"; Fragment decorations\n"
-		"OpDecorate %frag_fragColor Location 0\n"
-		"OpDecorate %frag_vtxColor Location 1\n"
+	if (useTessellation)
+	{
+		combinedModule <<	"OpExecutionMode %tessc_main OutputVertices 3\n"
+							"OpExecutionMode %tesse_main Triangles\n"
+							"OpExecutionMode %tesse_main SpacingEqual\n"
+							"OpExecutionMode %tesse_main VertexOrderCcw\n";
+	}
 
-		SPIRV_ASSEMBLY_TYPES
-		SPIRV_ASSEMBLY_CONSTANTS
-		SPIRV_ASSEMBLY_ARRAYS
+	combinedModule <<	"OpExecutionMode %frag_main OriginUpperLeft\n"
 
-		"; Vertex Variables\n"
-		"%vert_vtxPosition = OpVariable %op_v4f32 Output\n"
-		"%vert_Position = OpVariable %ip_v4f32 Input\n"
-		"%vert_vtxColor = OpVariable %op_v4f32 Output\n"
-		"%vert_color = OpVariable %ip_v4f32 Input\n"
-		"%vert_vertex_id = OpVariable %ip_i32 Input\n"
-		"%vert_instance_id = OpVariable %ip_i32 Input\n"
+						"; Vertex decorations\n";
 
-		"; Geometry Variables\n"
-		"%geom_per_vertex_in = OpTypeStruct %v4f32 %f32 %a1f32 %a1f32\n"
-		"%geom_a3_per_vertex_in = OpTypeArray %geom_per_vertex_in %c_u32_3\n"
-		"%geom_ip_a3_per_vertex_in = OpTypePointer Input %geom_a3_per_vertex_in\n"
-		"%geom_gl_in = OpVariable %geom_ip_a3_per_vertex_in Input\n"
-		"%geom_out_color = OpVariable %op_v4f32 Output\n"
-		"%geom_in_color = OpVariable %ip_a3v4f32 Input\n"
-		"%geom_out_gl_position = OpVariable %op_v4f32 Output\n"
+	// If tessellation is used, vertex position is written by tessellation stage.
+	// Otherwise it will be written by vertex stage.
+	if (useTessellation)
+		combinedModule <<	"OpDecorate %vert_vtxPosition Location 2\n";
+	else
+		combinedModule <<	"OpDecorate %vert_vtxPosition BuiltIn Position\n";
 
-		"; Tessellation Control Variables\n"
-		"%tessc_out_color = OpVariable %op_a3v4f32 Output\n"
-		"%tessc_gl_InvocationID = OpVariable %ip_i32 Input\n"
-		"%tessc_in_color = OpVariable %ip_a32v4f32 Input\n"
-		"%tessc_out_position = OpVariable %op_a3v4f32 Output\n"
-		"%tessc_in_position = OpVariable %ip_a32v4f32 Input\n"
-		"%tessc_gl_TessLevelOuter = OpVariable %op_a4f32 Output\n"
-		"%tessc_gl_TessLevelInner = OpVariable %op_a2f32 Output\n"
+	combinedModule	<<	"OpDecorate %vert_Position Location 0\n"
+						"OpDecorate %vert_vtxColor Location 1\n"
+						"OpDecorate %vert_color Location 1\n"
+						"OpDecorate %vert_vertex_id BuiltIn VertexIndex\n"
+						"OpDecorate %vert_instance_id BuiltIn InstanceIndex\n";
 
-		"; Tessellation Evaluation Decorations\n"
-		"%tesse_per_vertex_out = OpTypeStruct %v4f32 %f32 %a1f32 %a1f32\n"
-		"%tesse_op_per_vertex_out = OpTypePointer Output %tesse_per_vertex_out\n"
-		"%tesse_stream = OpVariable %tesse_op_per_vertex_out Output\n"
-		"%tesse_gl_tessCoord = OpVariable %ip_v3f32 Input\n"
-		"%tesse_in_position = OpVariable %ip_a32v4f32 Input\n"
-		"%tesse_out_color = OpVariable %op_v4f32 Output\n"
-		"%tesse_in_color = OpVariable %ip_a32v4f32 Input\n"
+	if (useGeometry)
+	{
+		combinedModule <<	"; Geometry decorations\n"
+							"OpDecorate %geom_out_gl_position BuiltIn Position\n"
+							"OpMemberDecorate %geom_per_vertex_in 0 BuiltIn Position\n"
+							"OpMemberDecorate %geom_per_vertex_in 1 BuiltIn PointSize\n"
+							"OpMemberDecorate %geom_per_vertex_in 2 BuiltIn ClipDistance\n"
+							"OpMemberDecorate %geom_per_vertex_in 3 BuiltIn CullDistance\n"
+							"OpDecorate %geom_per_vertex_in Block\n"
+							"OpDecorate %geom_out_color Location 1\n"
+							"OpDecorate %geom_in_color Location 1\n";
+	}
 
-		"; Fragment Variables\n"
-		"%frag_fragColor = OpVariable %op_v4f32 Output\n"
-		"%frag_vtxColor = OpVariable %ip_v4f32 Input\n"
+	if (useTessellation)
+	{
+		combinedModule <<	"; Tessellation Control decorations\n"
+							"OpDecorate %tessc_out_color Location 1\n"
+							"OpDecorate %tessc_gl_InvocationID BuiltIn InvocationId\n"
+							"OpDecorate %tessc_in_color Location 1\n"
+							"OpDecorate %tessc_out_position Location 2\n"
+							"OpDecorate %tessc_in_position Location 2\n"
+							"OpDecorate %tessc_gl_TessLevelOuter Patch\n"
+							"OpDecorate %tessc_gl_TessLevelOuter BuiltIn TessLevelOuter\n"
+							"OpDecorate %tessc_gl_TessLevelInner Patch\n"
+							"OpDecorate %tessc_gl_TessLevelInner BuiltIn TessLevelInner\n"
 
-		"; Vertex Entry\n"
-		"%vert_main = OpFunction %void None %fun\n"
-		"%vert_label = OpLabel\n"
-		"%vert_tmp_position = OpLoad %v4f32 %vert_Position\n"
-		"OpStore %vert_vtxPosition %vert_tmp_position\n"
-		"%vert_tmp_color = OpLoad %v4f32 %vert_color\n"
-		"OpStore %vert_vtxColor %vert_tmp_color\n"
-		"OpReturn\n"
-		"OpFunctionEnd\n"
+							"; Tessellation Evaluation decorations\n"
+							"OpMemberDecorate %tesse_per_vertex_out 0 BuiltIn Position\n"
+							"OpMemberDecorate %tesse_per_vertex_out 1 BuiltIn PointSize\n"
+							"OpMemberDecorate %tesse_per_vertex_out 2 BuiltIn ClipDistance\n"
+							"OpMemberDecorate %tesse_per_vertex_out 3 BuiltIn CullDistance\n"
+							"OpDecorate %tesse_per_vertex_out Block\n"
+							"OpDecorate %tesse_gl_tessCoord BuiltIn TessCoord\n"
+							"OpDecorate %tesse_in_position Location 2\n"
+							"OpDecorate %tesse_out_color Location 1\n"
+							"OpDecorate %tesse_in_color Location 1\n";
+	}
 
-		"; Geometry Entry\n"
-		"%geom_main = OpFunction %void None %fun\n"
-		"%geom_label = OpLabel\n"
-		"%geom_gl_in_0_gl_position = OpAccessChain %ip_v4f32 %geom_gl_in %c_i32_0 %c_i32_0\n"
-		"%geom_gl_in_1_gl_position = OpAccessChain %ip_v4f32 %geom_gl_in %c_i32_1 %c_i32_0\n"
-		"%geom_gl_in_2_gl_position = OpAccessChain %ip_v4f32 %geom_gl_in %c_i32_2 %c_i32_0\n"
-		"%geom_in_position_0 = OpLoad %v4f32 %geom_gl_in_0_gl_position\n"
-		"%geom_in_position_1 = OpLoad %v4f32 %geom_gl_in_1_gl_position\n"
-		"%geom_in_position_2 = OpLoad %v4f32 %geom_gl_in_2_gl_position \n"
-		"%geom_in_color_0_ptr = OpAccessChain %ip_v4f32 %geom_in_color %c_i32_0\n"
-		"%geom_in_color_1_ptr = OpAccessChain %ip_v4f32 %geom_in_color %c_i32_1\n"
-		"%geom_in_color_2_ptr = OpAccessChain %ip_v4f32 %geom_in_color %c_i32_2\n"
-		"%geom_in_color_0 = OpLoad %v4f32 %geom_in_color_0_ptr\n"
-		"%geom_in_color_1 = OpLoad %v4f32 %geom_in_color_1_ptr\n"
-		"%geom_in_color_2 = OpLoad %v4f32 %geom_in_color_2_ptr\n"
-		"OpStore %geom_out_gl_position %geom_in_position_0\n"
-		"OpStore %geom_out_color %geom_in_color_0\n"
-		"OpEmitVertex\n"
-		"OpStore %geom_out_gl_position %geom_in_position_1\n"
-		"OpStore %geom_out_color %geom_in_color_1\n"
-		"OpEmitVertex\n"
-		"OpStore %geom_out_gl_position %geom_in_position_2\n"
-		"OpStore %geom_out_color %geom_in_color_2\n"
-		"OpEmitVertex\n"
-		"OpEndPrimitive\n"
-		"OpReturn\n"
-		"OpFunctionEnd\n"
+	combinedModule <<	"; Fragment decorations\n"
+						"OpDecorate %frag_fragColor Location 0\n"
+						"OpDecorate %frag_vtxColor Location 1\n"
 
-		"; Tessellation Control Entry\n"
-		"%tessc_main = OpFunction %void None %fun\n"
-		"%tessc_label = OpLabel\n"
-		"%tessc_invocation_id = OpLoad %i32 %tessc_gl_InvocationID\n"
-		"%tessc_in_color_ptr = OpAccessChain %ip_v4f32 %tessc_in_color %tessc_invocation_id\n"
-		"%tessc_in_position_ptr = OpAccessChain %ip_v4f32 %tessc_in_position %tessc_invocation_id\n"
-		"%tessc_in_color_val = OpLoad %v4f32 %tessc_in_color_ptr\n"
-		"%tessc_in_position_val = OpLoad %v4f32 %tessc_in_position_ptr\n"
-		"%tessc_out_color_ptr = OpAccessChain %op_v4f32 %tessc_out_color %tessc_invocation_id\n"
-		"%tessc_out_position_ptr = OpAccessChain %op_v4f32 %tessc_out_position %tessc_invocation_id\n"
-		"OpStore %tessc_out_color_ptr %tessc_in_color_val\n"
-		"OpStore %tessc_out_position_ptr %tessc_in_position_val\n"
-		"%tessc_is_first_invocation = OpIEqual %bool %tessc_invocation_id %c_i32_0\n"
-		"OpSelectionMerge %tessc_merge_label None\n"
-		"OpBranchConditional %tessc_is_first_invocation %tessc_first_invocation %tessc_merge_label\n"
-		"%tessc_first_invocation = OpLabel\n"
-		"%tessc_tess_outer_0 = OpAccessChain %op_f32 %tessc_gl_TessLevelOuter %c_i32_0\n"
-		"%tessc_tess_outer_1 = OpAccessChain %op_f32 %tessc_gl_TessLevelOuter %c_i32_1\n"
-		"%tessc_tess_outer_2 = OpAccessChain %op_f32 %tessc_gl_TessLevelOuter %c_i32_2\n"
-		"%tessc_tess_inner = OpAccessChain %op_f32 %tessc_gl_TessLevelInner %c_i32_0\n"
-		"OpStore %tessc_tess_outer_0 %c_f32_1\n"
-		"OpStore %tessc_tess_outer_1 %c_f32_1\n"
-		"OpStore %tessc_tess_outer_2 %c_f32_1\n"
-		"OpStore %tessc_tess_inner %c_f32_1\n"
-		"OpBranch %tessc_merge_label\n"
-		"%tessc_merge_label = OpLabel\n"
-		"OpReturn\n"
-		"OpFunctionEnd\n"
+						SPIRV_ASSEMBLY_TYPES
+						SPIRV_ASSEMBLY_CONSTANTS
+						SPIRV_ASSEMBLY_ARRAYS
 
-		"; Tessellation Evaluation Entry\n"
-		"%tesse_main = OpFunction %void None %fun\n"
-		"%tesse_label = OpLabel\n"
-		"%tesse_tc_0_ptr = OpAccessChain %ip_f32 %tesse_gl_tessCoord %c_u32_0\n"
-		"%tesse_tc_1_ptr = OpAccessChain %ip_f32 %tesse_gl_tessCoord %c_u32_1\n"
-		"%tesse_tc_2_ptr = OpAccessChain %ip_f32 %tesse_gl_tessCoord %c_u32_2\n"
-		"%tesse_tc_0 = OpLoad %f32 %tesse_tc_0_ptr\n"
-		"%tesse_tc_1 = OpLoad %f32 %tesse_tc_1_ptr\n"
-		"%tesse_tc_2 = OpLoad %f32 %tesse_tc_2_ptr\n"
-		"%tesse_in_pos_0_ptr = OpAccessChain %ip_v4f32 %tesse_in_position %c_i32_0\n"
-		"%tesse_in_pos_1_ptr = OpAccessChain %ip_v4f32 %tesse_in_position %c_i32_1\n"
-		"%tesse_in_pos_2_ptr = OpAccessChain %ip_v4f32 %tesse_in_position %c_i32_2\n"
-		"%tesse_in_pos_0 = OpLoad %v4f32 %tesse_in_pos_0_ptr\n"
-		"%tesse_in_pos_1 = OpLoad %v4f32 %tesse_in_pos_1_ptr\n"
-		"%tesse_in_pos_2 = OpLoad %v4f32 %tesse_in_pos_2_ptr\n"
-		"%tesse_in_pos_0_weighted = OpVectorTimesScalar %v4f32 %tesse_in_pos_0 %tesse_tc_0\n"
-		"%tesse_in_pos_1_weighted = OpVectorTimesScalar %v4f32 %tesse_in_pos_1 %tesse_tc_1\n"
-		"%tesse_in_pos_2_weighted = OpVectorTimesScalar %v4f32 %tesse_in_pos_2 %tesse_tc_2\n"
-		"%tesse_out_pos_ptr = OpAccessChain %op_v4f32 %tesse_stream %c_i32_0\n"
-		"%tesse_in_pos_0_plus_pos_1 = OpFAdd %v4f32 %tesse_in_pos_0_weighted %tesse_in_pos_1_weighted\n"
-		"%tesse_computed_out = OpFAdd %v4f32 %tesse_in_pos_0_plus_pos_1 %tesse_in_pos_2_weighted\n"
-		"OpStore %tesse_out_pos_ptr %tesse_computed_out\n"
-		"%tesse_in_clr_0_ptr = OpAccessChain %ip_v4f32 %tesse_in_color %c_i32_0\n"
-		"%tesse_in_clr_1_ptr = OpAccessChain %ip_v4f32 %tesse_in_color %c_i32_1\n"
-		"%tesse_in_clr_2_ptr = OpAccessChain %ip_v4f32 %tesse_in_color %c_i32_2\n"
-		"%tesse_in_clr_0 = OpLoad %v4f32 %tesse_in_clr_0_ptr\n"
-		"%tesse_in_clr_1 = OpLoad %v4f32 %tesse_in_clr_1_ptr\n"
-		"%tesse_in_clr_2 = OpLoad %v4f32 %tesse_in_clr_2_ptr\n"
-		"%tesse_in_clr_0_weighted = OpVectorTimesScalar %v4f32 %tesse_in_clr_0 %tesse_tc_0\n"
-		"%tesse_in_clr_1_weighted = OpVectorTimesScalar %v4f32 %tesse_in_clr_1 %tesse_tc_1\n"
-		"%tesse_in_clr_2_weighted = OpVectorTimesScalar %v4f32 %tesse_in_clr_2 %tesse_tc_2\n"
-		"%tesse_in_clr_0_plus_col_1 = OpFAdd %v4f32 %tesse_in_clr_0_weighted %tesse_in_clr_1_weighted\n"
-		"%tesse_computed_clr = OpFAdd %v4f32 %tesse_in_clr_0_plus_col_1 %tesse_in_clr_2_weighted\n"
-		"OpStore %tesse_out_color %tesse_computed_clr\n"
-		"OpReturn\n"
-		"OpFunctionEnd\n"
+						"; Vertex Variables\n"
+						"%vert_vtxPosition = OpVariable %op_v4f32 Output\n"
+						"%vert_Position = OpVariable %ip_v4f32 Input\n"
+						"%vert_vtxColor = OpVariable %op_v4f32 Output\n"
+						"%vert_color = OpVariable %ip_v4f32 Input\n"
+						"%vert_vertex_id = OpVariable %ip_i32 Input\n"
+						"%vert_instance_id = OpVariable %ip_i32 Input\n";
 
-		"; Fragment Entry\n"
-		"%frag_main = OpFunction %void None %fun\n"
-		"%frag_label_main = OpLabel\n"
-		"%frag_tmp1 = OpLoad %v4f32 %frag_vtxColor\n"
-		"OpStore %frag_fragColor %frag_tmp1\n"
-		"OpReturn\n"
-		"OpFunctionEnd\n";
+	if (useGeometry)
+	{
+		combinedModule <<	"; Geometry Variables\n"
+							"%geom_per_vertex_in = OpTypeStruct %v4f32 %f32 %a1f32 %a1f32\n"
+							"%geom_a3_per_vertex_in = OpTypeArray %geom_per_vertex_in %c_u32_3\n"
+							"%geom_ip_a3_per_vertex_in = OpTypePointer Input %geom_a3_per_vertex_in\n"
+							"%geom_gl_in = OpVariable %geom_ip_a3_per_vertex_in Input\n"
+							"%geom_out_color = OpVariable %op_v4f32 Output\n"
+							"%geom_in_color = OpVariable %ip_a3v4f32 Input\n"
+							"%geom_out_gl_position = OpVariable %op_v4f32 Output\n";
+	}
+
+	if (useTessellation)
+	{
+		combinedModule <<	"; Tessellation Control Variables\n"
+							"%tessc_out_color = OpVariable %op_a3v4f32 Output\n"
+							"%tessc_gl_InvocationID = OpVariable %ip_i32 Input\n"
+							"%tessc_in_color = OpVariable %ip_a32v4f32 Input\n"
+							"%tessc_out_position = OpVariable %op_a3v4f32 Output\n"
+							"%tessc_in_position = OpVariable %ip_a32v4f32 Input\n"
+							"%tessc_gl_TessLevelOuter = OpVariable %op_a4f32 Output\n"
+							"%tessc_gl_TessLevelInner = OpVariable %op_a2f32 Output\n"
+
+							"; Tessellation Evaluation Decorations\n"
+							"%tesse_per_vertex_out = OpTypeStruct %v4f32 %f32 %a1f32 %a1f32\n"
+							"%tesse_op_per_vertex_out = OpTypePointer Output %tesse_per_vertex_out\n"
+							"%tesse_stream = OpVariable %tesse_op_per_vertex_out Output\n"
+							"%tesse_gl_tessCoord = OpVariable %ip_v3f32 Input\n"
+							"%tesse_in_position = OpVariable %ip_a32v4f32 Input\n"
+							"%tesse_out_color = OpVariable %op_v4f32 Output\n"
+							"%tesse_in_color = OpVariable %ip_a32v4f32 Input\n";
+	}
+
+	combinedModule	<<	"; Fragment Variables\n"
+						"%frag_fragColor = OpVariable %op_v4f32 Output\n"
+						"%frag_vtxColor = OpVariable %ip_v4f32 Input\n"
+
+						"; Vertex Entry\n"
+						"%vert_main = OpFunction %void None %fun\n"
+						"%vert_label = OpLabel\n"
+						"%vert_tmp_position = OpLoad %v4f32 %vert_Position\n"
+						"OpStore %vert_vtxPosition %vert_tmp_position\n"
+						"%vert_tmp_color = OpLoad %v4f32 %vert_color\n"
+						"OpStore %vert_vtxColor %vert_tmp_color\n"
+						"OpReturn\n"
+						"OpFunctionEnd\n";
+
+	if (useGeometry)
+	{
+		combinedModule <<	"; Geometry Entry\n"
+							"%geom_main = OpFunction %void None %fun\n"
+							"%geom_label = OpLabel\n"
+							"%geom_gl_in_0_gl_position = OpAccessChain %ip_v4f32 %geom_gl_in %c_i32_0 %c_i32_0\n"
+							"%geom_gl_in_1_gl_position = OpAccessChain %ip_v4f32 %geom_gl_in %c_i32_1 %c_i32_0\n"
+							"%geom_gl_in_2_gl_position = OpAccessChain %ip_v4f32 %geom_gl_in %c_i32_2 %c_i32_0\n"
+							"%geom_in_position_0 = OpLoad %v4f32 %geom_gl_in_0_gl_position\n"
+							"%geom_in_position_1 = OpLoad %v4f32 %geom_gl_in_1_gl_position\n"
+							"%geom_in_position_2 = OpLoad %v4f32 %geom_gl_in_2_gl_position \n"
+							"%geom_in_color_0_ptr = OpAccessChain %ip_v4f32 %geom_in_color %c_i32_0\n"
+							"%geom_in_color_1_ptr = OpAccessChain %ip_v4f32 %geom_in_color %c_i32_1\n"
+							"%geom_in_color_2_ptr = OpAccessChain %ip_v4f32 %geom_in_color %c_i32_2\n"
+							"%geom_in_color_0 = OpLoad %v4f32 %geom_in_color_0_ptr\n"
+							"%geom_in_color_1 = OpLoad %v4f32 %geom_in_color_1_ptr\n"
+							"%geom_in_color_2 = OpLoad %v4f32 %geom_in_color_2_ptr\n"
+							"OpStore %geom_out_gl_position %geom_in_position_0\n"
+							"OpStore %geom_out_color %geom_in_color_0\n"
+							"OpEmitVertex\n"
+							"OpStore %geom_out_gl_position %geom_in_position_1\n"
+							"OpStore %geom_out_color %geom_in_color_1\n"
+							"OpEmitVertex\n"
+							"OpStore %geom_out_gl_position %geom_in_position_2\n"
+							"OpStore %geom_out_color %geom_in_color_2\n"
+							"OpEmitVertex\n"
+							"OpEndPrimitive\n"
+							"OpReturn\n"
+							"OpFunctionEnd\n";
+	}
+
+	if (useTessellation)
+	{
+		combinedModule <<	"; Tessellation Control Entry\n"
+							"%tessc_main = OpFunction %void None %fun\n"
+							"%tessc_label = OpLabel\n"
+							"%tessc_invocation_id = OpLoad %i32 %tessc_gl_InvocationID\n"
+							"%tessc_in_color_ptr = OpAccessChain %ip_v4f32 %tessc_in_color %tessc_invocation_id\n"
+							"%tessc_in_position_ptr = OpAccessChain %ip_v4f32 %tessc_in_position %tessc_invocation_id\n"
+							"%tessc_in_color_val = OpLoad %v4f32 %tessc_in_color_ptr\n"
+							"%tessc_in_position_val = OpLoad %v4f32 %tessc_in_position_ptr\n"
+							"%tessc_out_color_ptr = OpAccessChain %op_v4f32 %tessc_out_color %tessc_invocation_id\n"
+							"%tessc_out_position_ptr = OpAccessChain %op_v4f32 %tessc_out_position %tessc_invocation_id\n"
+							"OpStore %tessc_out_color_ptr %tessc_in_color_val\n"
+							"OpStore %tessc_out_position_ptr %tessc_in_position_val\n"
+							"%tessc_is_first_invocation = OpIEqual %bool %tessc_invocation_id %c_i32_0\n"
+							"OpSelectionMerge %tessc_merge_label None\n"
+							"OpBranchConditional %tessc_is_first_invocation %tessc_first_invocation %tessc_merge_label\n"
+							"%tessc_first_invocation = OpLabel\n"
+							"%tessc_tess_outer_0 = OpAccessChain %op_f32 %tessc_gl_TessLevelOuter %c_i32_0\n"
+							"%tessc_tess_outer_1 = OpAccessChain %op_f32 %tessc_gl_TessLevelOuter %c_i32_1\n"
+							"%tessc_tess_outer_2 = OpAccessChain %op_f32 %tessc_gl_TessLevelOuter %c_i32_2\n"
+							"%tessc_tess_inner = OpAccessChain %op_f32 %tessc_gl_TessLevelInner %c_i32_0\n"
+							"OpStore %tessc_tess_outer_0 %c_f32_1\n"
+							"OpStore %tessc_tess_outer_1 %c_f32_1\n"
+							"OpStore %tessc_tess_outer_2 %c_f32_1\n"
+							"OpStore %tessc_tess_inner %c_f32_1\n"
+							"OpBranch %tessc_merge_label\n"
+							"%tessc_merge_label = OpLabel\n"
+							"OpReturn\n"
+							"OpFunctionEnd\n"
+
+							"; Tessellation Evaluation Entry\n"
+							"%tesse_main = OpFunction %void None %fun\n"
+							"%tesse_label = OpLabel\n"
+							"%tesse_tc_0_ptr = OpAccessChain %ip_f32 %tesse_gl_tessCoord %c_u32_0\n"
+							"%tesse_tc_1_ptr = OpAccessChain %ip_f32 %tesse_gl_tessCoord %c_u32_1\n"
+							"%tesse_tc_2_ptr = OpAccessChain %ip_f32 %tesse_gl_tessCoord %c_u32_2\n"
+							"%tesse_tc_0 = OpLoad %f32 %tesse_tc_0_ptr\n"
+							"%tesse_tc_1 = OpLoad %f32 %tesse_tc_1_ptr\n"
+							"%tesse_tc_2 = OpLoad %f32 %tesse_tc_2_ptr\n"
+							"%tesse_in_pos_0_ptr = OpAccessChain %ip_v4f32 %tesse_in_position %c_i32_0\n"
+							"%tesse_in_pos_1_ptr = OpAccessChain %ip_v4f32 %tesse_in_position %c_i32_1\n"
+							"%tesse_in_pos_2_ptr = OpAccessChain %ip_v4f32 %tesse_in_position %c_i32_2\n"
+							"%tesse_in_pos_0 = OpLoad %v4f32 %tesse_in_pos_0_ptr\n"
+							"%tesse_in_pos_1 = OpLoad %v4f32 %tesse_in_pos_1_ptr\n"
+							"%tesse_in_pos_2 = OpLoad %v4f32 %tesse_in_pos_2_ptr\n"
+							"%tesse_in_pos_0_weighted = OpVectorTimesScalar %v4f32 %tesse_in_pos_0 %tesse_tc_0\n"
+							"%tesse_in_pos_1_weighted = OpVectorTimesScalar %v4f32 %tesse_in_pos_1 %tesse_tc_1\n"
+							"%tesse_in_pos_2_weighted = OpVectorTimesScalar %v4f32 %tesse_in_pos_2 %tesse_tc_2\n"
+							"%tesse_out_pos_ptr = OpAccessChain %op_v4f32 %tesse_stream %c_i32_0\n"
+							"%tesse_in_pos_0_plus_pos_1 = OpFAdd %v4f32 %tesse_in_pos_0_weighted %tesse_in_pos_1_weighted\n"
+							"%tesse_computed_out = OpFAdd %v4f32 %tesse_in_pos_0_plus_pos_1 %tesse_in_pos_2_weighted\n"
+							"OpStore %tesse_out_pos_ptr %tesse_computed_out\n"
+							"%tesse_in_clr_0_ptr = OpAccessChain %ip_v4f32 %tesse_in_color %c_i32_0\n"
+							"%tesse_in_clr_1_ptr = OpAccessChain %ip_v4f32 %tesse_in_color %c_i32_1\n"
+							"%tesse_in_clr_2_ptr = OpAccessChain %ip_v4f32 %tesse_in_color %c_i32_2\n"
+							"%tesse_in_clr_0 = OpLoad %v4f32 %tesse_in_clr_0_ptr\n"
+							"%tesse_in_clr_1 = OpLoad %v4f32 %tesse_in_clr_1_ptr\n"
+							"%tesse_in_clr_2 = OpLoad %v4f32 %tesse_in_clr_2_ptr\n"
+							"%tesse_in_clr_0_weighted = OpVectorTimesScalar %v4f32 %tesse_in_clr_0 %tesse_tc_0\n"
+							"%tesse_in_clr_1_weighted = OpVectorTimesScalar %v4f32 %tesse_in_clr_1 %tesse_tc_1\n"
+							"%tesse_in_clr_2_weighted = OpVectorTimesScalar %v4f32 %tesse_in_clr_2 %tesse_tc_2\n"
+							"%tesse_in_clr_0_plus_col_1 = OpFAdd %v4f32 %tesse_in_clr_0_weighted %tesse_in_clr_1_weighted\n"
+							"%tesse_computed_clr = OpFAdd %v4f32 %tesse_in_clr_0_plus_col_1 %tesse_in_clr_2_weighted\n"
+							"OpStore %tesse_out_color %tesse_computed_clr\n"
+							"OpReturn\n"
+							"OpFunctionEnd\n";
+	}
+
+	combinedModule	<<	"; Fragment Entry\n"
+						"%frag_main = OpFunction %void None %fun\n"
+						"%frag_label_main = OpLabel\n"
+						"%frag_tmp1 = OpLoad %v4f32 %frag_vtxColor\n"
+						"OpStore %frag_fragColor %frag_tmp1\n"
+						"OpReturn\n"
+						"OpFunctionEnd\n";
+
+	dst.spirvAsmSources.add("module") << combinedModule.str();
 }
 
 void createMultipleEntries (vk::SourceCollections& dst, InstanceContext)
@@ -1662,8 +1714,6 @@ void createMultipleEntries (vk::SourceCollections& dst, InstanceContext)
 
 	dst.spirvAsmSources.add("geom") <<
 		"OpCapability Geometry\n"
-		"OpCapability ClipDistance\n"
-		"OpCapability CullDistance\n"
 		"OpMemoryModel Logical GLSL450\n"
 		"OpEntryPoint Geometry %geom1_main \"geom1\" %out_gl_position %gl_in %out_color %in_color\n"
 		"OpEntryPoint Geometry %geom2_main \"geom2\" %out_gl_position %gl_in %out_color %in_color\n"
@@ -1841,8 +1891,6 @@ void createMultipleEntries (vk::SourceCollections& dst, InstanceContext)
 
 	dst.spirvAsmSources.add("tesse") <<
 		"OpCapability Tessellation\n"
-		"OpCapability ClipDistance\n"
-		"OpCapability CullDistance\n"
 		"OpMemoryModel Logical GLSL450\n"
 		"OpEntryPoint TessellationEvaluation %tesse1_main \"tesse1\" %stream %gl_tessCoord %in_position %out_color %in_color \n"
 		"OpEntryPoint TessellationEvaluation %tesse2_main \"tesse2\" %stream %gl_tessCoord %in_position %out_color %in_color \n"
@@ -2356,53 +2404,9 @@ void copyBufferToImage (const DeviceInterface& vk, const VkDevice& device, const
 	};
 
 	// Copy buffer to image
-
-	const VkImageMemoryBarrier		imageBarriers[]		=
-	{
-		{
-			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,		// VkStructureType			sType;
-			DE_NULL,									// const void*				pNext;
-			DE_NULL,									// VkAccessFlags			srcAccessMask;
-			VK_ACCESS_TRANSFER_WRITE_BIT,				// VkAccessFlags			dstAccessMask;
-			VK_IMAGE_LAYOUT_UNDEFINED,					// VkImageLayout			oldLayout;
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,		// VkImageLayout			newLayout;
-			VK_QUEUE_FAMILY_IGNORED,					// deUint32					srcQueueFamilyIndex;
-			VK_QUEUE_FAMILY_IGNORED,					// deUint32					dstQueueFamilyIndex;
-			image,										// VkImage					image;
-			{											// VkImageSubresourceRange	subresourceRange;
-				aspect,							// VkImageAspectFlags	aspectMask;
-				0u,								// deUint32				baseMipLevel;
-				1u,								// deUint32				mipLevels;
-				0u,								// deUint32				baseArraySlice;
-				1u								// deUint32				arraySize;
-			}
-		},
-		{
-			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,		// VkStructureType			sType;
-			DE_NULL,									// const void*				pNext;
-			VK_ACCESS_TRANSFER_WRITE_BIT,				// VkAccessFlags			srcAccessMask;
-			VK_ACCESS_SHADER_READ_BIT,					// VkAccessFlags			dstAccessMask;
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,		// VkImageLayout			oldLayout;
-			VK_IMAGE_LAYOUT_GENERAL,					// VkImageLayout			newLayout;
-			VK_QUEUE_FAMILY_IGNORED,					// deUint32					srcQueueFamilyIndex;
-			VK_QUEUE_FAMILY_IGNORED,					// deUint32					dstQueueFamilyIndex;
-			image,										// VkImage					image;
-			{											// VkImageSubresourceRange	subresourceRange;
-				aspect,							// VkImageAspectFlags	aspectMask;
-				0u,								// deUint32				baseMipLevel;
-				1u,								// deUint32				mipLevels;
-				0u,								// deUint32				baseArraySlice;
-				1u								// deUint32				arraySize;
-			}
-		},
-	};
-
 	beginCommandBuffer(vk, cmdBuffer);
-	vk.cmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, (VkDependencyFlags)0, 0, (const VkMemoryBarrier*)DE_NULL,
-		0u, DE_NULL, 1u, &imageBarriers[0]);
-	vk.cmdCopyBufferToImage(cmdBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &copyRegion);
-	vk.cmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, (VkDependencyFlags)0, 0, (const VkMemoryBarrier*)DE_NULL,
-		0, (const VkBufferMemoryBarrier*)DE_NULL, 1, &imageBarriers[1]);
+
+	copyBufferToImage(vk, cmdBuffer, buffer, VK_WHOLE_SIZE, vector<VkBufferImageCopy>(1, copyRegion), aspect, 1u, 1u, image, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
 	endCommandBuffer(vk, cmdBuffer);
 
@@ -2447,7 +2451,8 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 	const int									seed					= context.getTestContext().getCommandLine().getBaseSeed() ^ testSpecificSeed;
 	bool										supportsGeometry		= false;
 	bool										supportsTessellation	= false;
-	bool										hasTessellation         = false;
+	bool										hasGeometry				= false;
+	bool										hasTessellation			= false;
 	const bool									hasPushConstants		= !instance.pushConstants.empty();
 	const deUint32								numResources			= static_cast<deUint32>(instance.resources.inputs.size() + instance.resources.outputs.size());
 	const bool									needInterface			= !instance.interfaces.empty();
@@ -2456,18 +2461,18 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 
 	supportsGeometry		= features.geometryShader == VK_TRUE;
 	supportsTessellation	= features.tessellationShader == VK_TRUE;
+	hasGeometry				= (instance.requiredStages & VK_SHADER_STAGE_GEOMETRY_BIT);
 	hasTessellation			= (instance.requiredStages & VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT) ||
 								(instance.requiredStages & VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT);
+
+	if (hasGeometry && !supportsGeometry)
+	{
+		TCU_THROW(NotSupportedError, "Geometry not supported");
+	}
 
 	if (hasTessellation && !supportsTessellation)
 	{
 		TCU_THROW(NotSupportedError, "Tessellation not supported");
-	}
-
-	if ((instance.requiredStages & VK_SHADER_STAGE_GEOMETRY_BIT) &&
-		!supportsGeometry)
-	{
-		TCU_THROW(NotSupportedError, "Geometry not supported");
 	}
 
 	// Check all required extensions are supported
@@ -2475,38 +2480,6 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 	{
 		if (!de::contains(context.getDeviceExtensions().begin(), context.getDeviceExtensions().end(), *i))
 			TCU_THROW(NotSupportedError, (std::string("Extension not supported: ") + *i).c_str());
-	}
-
-	{
-		for (deUint32 featureNdx = 0; featureNdx < instance.requiredDeviceFeatures.size(); ++featureNdx)
-		{
-			const string& feature = instance.requiredDeviceFeatures[featureNdx];
-
-			if (feature == "shaderInt16")
-			{
-				if (features.shaderInt16 != VK_TRUE)
-					TCU_THROW(NotSupportedError, "Device feature not supported: shaderInt16");
-			}
-			else if (feature == "shaderInt64")
-			{
-				if (features.shaderInt64 != VK_TRUE)
-					TCU_THROW(NotSupportedError, "Device feature not supported: shaderInt64");
-			}
-			else if (feature == "shaderFloat64")
-			{
-				if (features.shaderFloat64 != VK_TRUE)
-					TCU_THROW(NotSupportedError, "Device feature not supported: shaderFloat64");
-			}
-			else if (feature == "fragmentStoresAndAtomics")
-			{
-				if (features.fragmentStoresAndAtomics != VK_TRUE)
-					TCU_THROW(NotSupportedError, "Device feature not supported: fragmentStoresAndAtomics");
-			}
-			else
-			{
-				TCU_THROW(InternalError, (std::string("Unimplemented physical device feature: ") + feature).c_str());
-			}
-		}
 	}
 
 	// Core features
@@ -3810,18 +3783,9 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 
 	// Upload vertex data
 	{
-		const VkMappedMemoryRange	range			=
-		{
-			VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,	//	VkStructureType	sType;
-			DE_NULL,								//	const void*		pNext;
-			vertexBufferMemory->getMemory(),		//	VkDeviceMemory	mem;
-			0,										//	VkDeviceSize	offset;
-			(VkDeviceSize)vertexDataSize,			//	VkDeviceSize	size;
-		};
-		void*						vertexBufPtr	= vertexBufferMemory->getHostPtr();
-
+		void* vertexBufPtr = vertexBufferMemory->getHostPtr();
 		deMemcpy(vertexBufPtr, &vertexData[0], vertexDataSize);
-		VK_CHECK(vk.flushMappedMemoryRanges(device, 1u, &range));
+		flushAlloc(vk, device, *vertexBufferMemory);
 	}
 
 	if (needInterface)
@@ -3870,19 +3834,8 @@ TestStatus runAndVerifyDefaultPipeline (Context& context, InstanceContext instan
 	const tcu::ConstPixelBufferAccess pixelBuffer(tcu::TextureFormat(tcu::TextureFormat::RGBA, tcu::TextureFormat::UNORM_INT8),
 												  renderSize.x(), renderSize.y(), 1, imagePtr);
 	// Log image
-	{
-		const VkMappedMemoryRange	range		=
-		{
-			VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,	//	VkStructureType	sType;
-			DE_NULL,								//	const void*		pNext;
-			readImageBufferMemory->getMemory(),		//	VkDeviceMemory	mem;
-			0,										//	VkDeviceSize	offset;
-			imageSizeBytes,							//	VkDeviceSize	size;
-		};
-
-		VK_CHECK(vk.invalidateMappedMemoryRanges(device, 1u, &range));
-		context.getTestContext().getLog() << TestLog::Image("Result", "Result", pixelBuffer);
-	}
+	invalidateAlloc(vk, device, *readImageBufferMemory);
+	context.getTestContext().getLog() << TestLog::Image("Result", "Result", pixelBuffer);
 
 	if (needInterface)
 	{
@@ -4162,7 +4115,6 @@ void createTestForStage (vk::VkShaderStageFlagBits	stage,
 						 const GraphicsResources&	resources,
 						 const GraphicsInterfaces&	interfaces,
 						 const vector<string>&		extensions,
-						 const vector<string>&		features,
 						 VulkanFeatures				vulkanFeatures,
 						 tcu::TestCaseGroup*		tests,
 						 const qpTestResult			failResult,
@@ -4177,7 +4129,7 @@ void createTestForStage (vk::VkShaderStageFlagBits	stage,
 	if (!specConstants.empty())
 		specConstantMap[stage] = specConstants;
 
-	InstanceContext					ctx					(inputColors, outputColors, testCodeFragments, specConstantMap, pushConstants, resources, interfaces, extensions, features, vulkanFeatures, stage);
+	InstanceContext					ctx					(inputColors, outputColors, testCodeFragments, specConstantMap, pushConstants, resources, interfaces, extensions, vulkanFeatures, stage);
 	for (size_t i = 0; i < pipeline.size(); ++i)
 	{
 		ctx.moduleMap[pipeline[i].moduleName].push_back(std::make_pair(pipeline[i].entryName, pipeline[i].stage));
@@ -4201,7 +4153,6 @@ void createTestsForAllStages (const std::string&			name,
 							  const GraphicsResources&		resources,
 							  const GraphicsInterfaces&		interfaces,
 							  const vector<string>&			extensions,
-							  const vector<string>&			features,
 							  VulkanFeatures				vulkanFeatures,
 							  tcu::TestCaseGroup*			tests,
 							  const qpTestResult			failResult,
@@ -4209,23 +4160,23 @@ void createTestsForAllStages (const std::string&			name,
 {
 	createTestForStage(VK_SHADER_STAGE_VERTEX_BIT, name + "_vert",
 					   inputColors, outputColors, testCodeFragments, specConstants, pushConstants, resources,
-					   interfaces, extensions, features, vulkanFeatures, tests, failResult, failMessageTemplate);
+					   interfaces, extensions, vulkanFeatures, tests, failResult, failMessageTemplate);
 
 	createTestForStage(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, name + "_tessc",
 					   inputColors, outputColors, testCodeFragments, specConstants, pushConstants, resources,
-					   interfaces, extensions, features, vulkanFeatures, tests, failResult, failMessageTemplate);
+					   interfaces, extensions, vulkanFeatures, tests, failResult, failMessageTemplate);
 
 	createTestForStage(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, name + "_tesse",
 					   inputColors, outputColors, testCodeFragments, specConstants, pushConstants, resources,
-					   interfaces, extensions, features, vulkanFeatures, tests, failResult, failMessageTemplate);
+					   interfaces, extensions, vulkanFeatures, tests, failResult, failMessageTemplate);
 
 	createTestForStage(VK_SHADER_STAGE_GEOMETRY_BIT, name + "_geom",
 					   inputColors, outputColors, testCodeFragments, specConstants, pushConstants, resources,
-					   interfaces, extensions, features, vulkanFeatures, tests, failResult, failMessageTemplate);
+					   interfaces, extensions, vulkanFeatures, tests, failResult, failMessageTemplate);
 
 	createTestForStage(VK_SHADER_STAGE_FRAGMENT_BIT, name + "_frag",
 					   inputColors, outputColors, testCodeFragments, specConstants, pushConstants, resources,
-					   interfaces, extensions, features, vulkanFeatures, tests, failResult, failMessageTemplate);
+					   interfaces, extensions, vulkanFeatures, tests, failResult, failMessageTemplate);
 }
 
 void addTessCtrlTest (tcu::TestCaseGroup* group, const char* name, const map<string, string>& fragments)
@@ -4235,7 +4186,7 @@ void addTessCtrlTest (tcu::TestCaseGroup* group, const char* name, const map<str
 
 	createTestForStage(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, name,
 					   defaultColors, defaultColors, fragments, SpecConstants(), PushConstants(), GraphicsResources(),
-					   GraphicsInterfaces(), vector<string>(), vector<string>(), VulkanFeatures(), group);
+					   GraphicsInterfaces(), vector<string>(), VulkanFeatures(), group);
 }
 
 } // SpirVAssembly
