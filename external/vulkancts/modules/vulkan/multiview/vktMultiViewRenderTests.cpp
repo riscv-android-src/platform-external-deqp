@@ -136,9 +136,9 @@ vk::Move<vk::VkRenderPass> makeRenderPassWithAttachments (const DeviceInterface&
 	switch (renderPassType)
 	{
 		case RENDERPASS_TYPE_LEGACY:
-			return MultiView::makeRenderPassWithAttachments<AttachmentDescription1, AttachmentReference1, SubpassDescription1, SubpassDependency1, RenderPassCreateInfo1>(vk, device, colorFormat, viewMasks);
+			return MultiView::makeRenderPassWithAttachments<AttachmentDescription1, AttachmentReference1, SubpassDescription1, SubpassDependency1, RenderPassCreateInfo1>(vk, device, colorFormat, viewMasks, renderPassType == RENDERPASS_TYPE_RENDERPASS2);
 		case RENDERPASS_TYPE_RENDERPASS2:
-			return MultiView::makeRenderPassWithAttachments<AttachmentDescription2, AttachmentReference2, SubpassDescription2, SubpassDependency2, RenderPassCreateInfo2>(vk, device, colorFormat, viewMasks);
+			return MultiView::makeRenderPassWithAttachments<AttachmentDescription2, AttachmentReference2, SubpassDescription2, SubpassDependency2, RenderPassCreateInfo2>(vk, device, colorFormat, viewMasks, renderPassType == RENDERPASS_TYPE_RENDERPASS2);
 		default:
 			TCU_THROW(InternalError, "Impossible");
 	}
@@ -2649,6 +2649,11 @@ void MultiViewQueriesTestInstance::draw (const deUint32 subpassCount, VkRenderPa
 	beginCommandBuffer(*m_device, *m_cmdBuffer);
 
 	beforeDraw();
+
+	// Query pools must be reset before use
+	m_device->cmdResetQueryPool(*m_cmdBuffer, *occlusionQueryPool, queryStartIndex, queryCountersNumber);
+	m_device->cmdResetQueryPool(*m_cmdBuffer, *timestampStartQueryPool, queryStartIndex, queryCountersNumber);
+	m_device->cmdResetQueryPool(*m_cmdBuffer, *timestampEndQueryPool, queryStartIndex, queryCountersNumber);
 
 	cmdBeginRenderPass(*m_device, *m_cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE, m_parameters.renderPassType);
 

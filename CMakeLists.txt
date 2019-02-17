@@ -64,6 +64,13 @@ if (NOT ZLIB_INCLUDE_PATH OR NOT ZLIB_LIBRARY)
 	# \note ZLIB_LIBRARY and ZLIB_INCLUDE_PATH are promoted from external/zlib/CMakeLists.txt
 endif ()
 
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/renderdoc/src/renderdoc_app.h")
+	message(STATUS "Renderdoc header found, integration enabled")
+	set(DEQP_HAVE_RENDERDOC_HEADER 1)
+else ()
+	message(STATUS "Renderdoc header not found, integration will not work")
+endif ()
+
 include_directories(${ZLIB_INCLUDE_PATH})
 
 # libpng
@@ -88,12 +95,26 @@ add_subdirectory(external/glslang)
 # spirv-tools
 add_subdirectory(external/spirv-tools)
 
+# VkRunner
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/vkrunner/src")
+	message(STATUS "VkRunner found, integration enabled")
+	set(DEQP_HAVE_VKRUNNER 1)
+	add_definitions("-DDEQP_HAVE_VKRUNNER=1")
+	add_subdirectory(external/vkrunner)
+	include_directories(external/vkrunner/src)
+else()
+	message(STATUS "VkRunner not found, integration disabled")
+endif ()
+
 # spirv-headers
 set(SPIRV_INCLUDE_PATH "${PROJECT_SOURCE_DIR}/external/spirv-headers/src/include")
 if (NOT EXISTS ${SPIRV_INCLUDE_PATH})
 	message(FATAL_ERROR "SPIR-V headers not found, please run external/fetch_sources.py")
 endif()
 include_directories(${SPIRV_INCLUDE_PATH})
+
+# RenderDoc API
+include_directories(external/renderdoc/src)
 
 include_directories(${PNG_INCLUDE_PATH})
 
@@ -154,6 +175,18 @@ if (DE_COMPILER_IS_MSC)
 	# Don't nag about std::copy for example
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_SCL_SECURE_NO_WARNINGS")
 endif ()
+
+# Precompiled header macro. Parameters are source file list and filename for pch cpp file.
+macro(PCH SRCS PCHCPP)
+  if(MSVC AND CMAKE_GENERATOR MATCHES "^Visual Studio")
+    set(PCH_NAME "$(IntDir)\\pch.pch")
+    # make source files use/depend on PCH_NAME
+    set_source_files_properties(${${SRCS}} PROPERTIES COMPILE_FLAGS "/Yupch.h /FIpch.h /Fp${PCH_NAME}" OBJECT_DEPENDS "${PCH_NAME}")
+    # make PCHCPP file compile and generate PCH_NAME
+    set_source_files_properties(${PCHCPP} PROPERTIES COMPILE_FLAGS "/Ycpch.h /Fp${PCH_NAME}" OBJECT_OUTPUTS "${PCH_NAME}")
+    list(APPEND ${SRCS} "${PCHCPP}")
+  endif()
+endmacro(PCH)
 
 # delibs projects
 add_subdirectory(framework/delibs/debase)

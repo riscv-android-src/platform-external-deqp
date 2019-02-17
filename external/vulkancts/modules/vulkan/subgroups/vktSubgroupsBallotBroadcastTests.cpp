@@ -45,72 +45,14 @@ enum OpType
 static bool checkVertexPipelineStages(std::vector<const void*> datas,
 									  deUint32 width, deUint32)
 {
-	const deUint32* data =
-		reinterpret_cast<const deUint32*>(datas[0]);
-	for (deUint32 x = 0; x < width; ++x)
-	{
-		deUint32 val = data[x];
-
-		if (0x3 != val)
-		{
-			return false;
-		}
-	}
-
-	return true;
+	return vkt::subgroups::check(datas, width, 3);
 }
 
 static bool checkCompute(std::vector<const void*> datas,
 						 const deUint32 numWorkgroups[3], const deUint32 localSize[3],
 						 deUint32)
 {
-	const deUint32* data =
-		reinterpret_cast<const deUint32*>(datas[0]);
-
-	for (deUint32 nX = 0; nX < numWorkgroups[0]; ++nX)
-	{
-		for (deUint32 nY = 0; nY < numWorkgroups[1]; ++nY)
-		{
-			for (deUint32 nZ = 0; nZ < numWorkgroups[2]; ++nZ)
-			{
-				for (deUint32 lX = 0; lX < localSize[0]; ++lX)
-				{
-					for (deUint32 lY = 0; lY < localSize[1]; ++lY)
-					{
-						for (deUint32 lZ = 0; lZ < localSize[2];
-								++lZ)
-						{
-							const deUint32 globalInvocationX =
-								nX * localSize[0] + lX;
-							const deUint32 globalInvocationY =
-								nY * localSize[1] + lY;
-							const deUint32 globalInvocationZ =
-								nZ * localSize[2] + lZ;
-
-							const deUint32 globalSizeX =
-								numWorkgroups[0] * localSize[0];
-							const deUint32 globalSizeY =
-								numWorkgroups[1] * localSize[1];
-
-							const deUint32 offset =
-								globalSizeX *
-								((globalSizeY *
-								  globalInvocationZ) +
-								 globalInvocationY) +
-								globalInvocationX;
-
-							if (0x3 != data[offset])
-							{
-								return false;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return true;
+	return vkt::subgroups::checkCompute(datas, numWorkgroups, localSize, 3);
 }
 
 std::string getOpTypeName(int opType)
@@ -150,7 +92,7 @@ std::string getBodySource(CaseDefinition caseDef)
 			<< "    const uint id = "<< i << ";\n"
 			<< "    " << subgroups::getFormatNameForGLSL(caseDef.format)
 			<< " op = subgroupBroadcast(data1[gl_SubgroupInvocationID], id);\n"
-			<< "    if ((0 <= id) && (id < gl_SubgroupSize) && subgroupBallotBitExtract(mask, id))\n"
+			<< "    if ((id < gl_SubgroupSize) && subgroupBallotBitExtract(mask, id))\n"
 			<< "    {\n"
 			<< "      if (op != data1[id])\n"
 			<< "      {\n"
@@ -588,8 +530,12 @@ namespace subgroups
 {
 tcu::TestCaseGroup* createSubgroupsBallotBroadcastTests(tcu::TestContext& testCtx)
 {
-	de::MovePtr<tcu::TestCaseGroup> group(new tcu::TestCaseGroup(
-			testCtx, "ballot_broadcast", "Subgroup ballot broadcast category tests"));
+	de::MovePtr<tcu::TestCaseGroup> graphicGroup(new tcu::TestCaseGroup(
+		testCtx, "graphics", "Subgroup ballot broadcast category tests: graphics"));
+	de::MovePtr<tcu::TestCaseGroup> computeGroup(new tcu::TestCaseGroup(
+		testCtx, "compute", "Subgroup ballot broadcast category tests: compute"));
+	de::MovePtr<tcu::TestCaseGroup> framebufferGroup(new tcu::TestCaseGroup(
+		testCtx, "framebuffer", "Subgroup ballot broadcast category tests: framebuffer"));
 
 	const VkShaderStageFlags stages[] =
 	{
@@ -619,26 +565,33 @@ tcu::TestCaseGroup* createSubgroupsBallotBroadcastTests(tcu::TestContext& testCt
 		for (int opTypeIndex = 0; opTypeIndex < OPTYPE_LAST; ++opTypeIndex)
 		{
 			const std::string op = de::toLower(getOpTypeName(opTypeIndex));
-			const std::string name = op + "_" + subgroups::getFormatNameForGLSL(format) + "_";
+			const std::string name = op + "_" + subgroups::getFormatNameForGLSL(format);
 
 			{
 				CaseDefinition caseDef = {opTypeIndex, VK_SHADER_STAGE_COMPUTE_BIT, format};
-				addFunctionCaseWithPrograms(group.get(), name + getShaderStageName(caseDef.shaderStage), "", supportedCheck, initPrograms, test, caseDef);
+				addFunctionCaseWithPrograms(computeGroup.get(), name, "", supportedCheck, initPrograms, test, caseDef);
 			}
 
 			{
 				const CaseDefinition caseDef = {opTypeIndex, VK_SHADER_STAGE_ALL_GRAPHICS, format};
-				addFunctionCaseWithPrograms(group.get(), name + "graphic" , "", supportedCheck, initPrograms, test, caseDef);
+				addFunctionCaseWithPrograms(graphicGroup.get(), name, "", supportedCheck, initPrograms, test, caseDef);
 			}
 
 			for (int stageIndex = 0; stageIndex < DE_LENGTH_OF_ARRAY(stages); ++stageIndex)
 			{
 				const CaseDefinition caseDef = {opTypeIndex, stages[stageIndex], format};
-				addFunctionCaseWithPrograms(group.get(), name + getShaderStageName(caseDef.shaderStage) + "_framebuffer", "",
+				addFunctionCaseWithPrograms(framebufferGroup.get(), name + getShaderStageName(caseDef.shaderStage), "",
 							supportedCheck, initFrameBufferPrograms, noSSBOtest, caseDef);
 			}
 		}
 	}
+
+	de::MovePtr<tcu::TestCaseGroup> group(new tcu::TestCaseGroup(
+		testCtx, "ballot_broadcast", "Subgroup ballot broadcast category tests"));
+
+	group->addChild(graphicGroup.release());
+	group->addChild(computeGroup.release());
+	group->addChild(framebufferGroup.release());
 	return group.release();
 }
 

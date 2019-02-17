@@ -9422,10 +9422,10 @@ dEQP-VK.rasterization.interpolation.projected.lines
 dEQP-VK.rasterization.interpolation.projected.line_strip
 dEQP-VK.rasterization.flatshading.lines
 dEQP-VK.rasterization.flatshading.line_strip
-dEQP-VK.subgroups.vote.subgroupallequal_bool_compute
-dEQP-VK.subgroups.vote.subgroupallequal_bvec2_compute
-dEQP-VK.subgroups.vote.subgroupallequal_bvec3_compute
-dEQP-VK.subgroups.vote.subgroupallequal_bvec4_compute
+dEQP-VK.subgroups.vote.compute.subgroupallequal_bool
+dEQP-VK.subgroups.vote.compute.subgroupallequal_bvec2
+dEQP-VK.subgroups.vote.compute.subgroupallequal_bvec3
+dEQP-VK.subgroups.vote.compute.subgroupallequal_bvec4
 dEQP-VK.memory_model.write_after_read.core11.u32.coherent.fence_fence.atomicwrite.device.payload_local.buffer.guard_local.buffer.comp
 dEQP-VK.memory_model.write_after_read.core11.u32.coherent.fence_fence.atomicwrite.device.payload_local.buffer.guard_local.buffer.vert
 dEQP-VK.memory_model.write_after_read.core11.u32.coherent.fence_fence.atomicwrite.device.payload_local.buffer.guard_local.image.comp

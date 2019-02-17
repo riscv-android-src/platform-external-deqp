@@ -227,9 +227,11 @@ tcu::Format::Bitfield<32>	getCompositeAlphaFlagsKHRStr						(VkCompositeAlphaFla
 tcu::Format::Bitfield<32>	getSwapchainCreateFlagsKHRStr						(VkSwapchainCreateFlagsKHR value);
 tcu::Format::Bitfield<32>	getDeviceGroupPresentModeFlagsKHRStr				(VkDeviceGroupPresentModeFlagsKHR value);
 tcu::Format::Bitfield<32>	getDisplayPlaneAlphaFlagsKHRStr						(VkDisplayPlaneAlphaFlagsKHR value);
+tcu::Format::Bitfield<32>	getResolveModeFlagsKHRStr							(VkResolveModeFlagsKHR value);
 tcu::Format::Bitfield<32>	getDebugReportFlagsEXTStr							(VkDebugReportFlagsEXT value);
 tcu::Format::Bitfield<32>	getExternalMemoryHandleTypeFlagsNVStr				(VkExternalMemoryHandleTypeFlagsNV value);
 tcu::Format::Bitfield<32>	getExternalMemoryFeatureFlagsNVStr					(VkExternalMemoryFeatureFlagsNV value);
+tcu::Format::Bitfield<32>	getConditionalRenderingFlagsEXTStr					(VkConditionalRenderingFlagsEXT value);
 tcu::Format::Bitfield<32>	getIndirectCommandsLayoutUsageFlagsNVXStr			(VkIndirectCommandsLayoutUsageFlagsNVX value);
 tcu::Format::Bitfield<32>	getObjectEntryUsageFlagsNVXStr						(VkObjectEntryUsageFlagsNVX value);
 tcu::Format::Bitfield<32>	getSurfaceCounterFlagsEXTStr						(VkSurfaceCounterFlagsEXT value);
@@ -522,6 +524,8 @@ std::ostream&	operator<<	(std::ostream& s, const VkImageFormatListCreateInfoKHR&
 std::ostream&	operator<<	(std::ostream& s, const VkConformanceVersionKHR& value);
 std::ostream&	operator<<	(std::ostream& s, const VkPhysicalDeviceDriverPropertiesKHR& value);
 std::ostream&	operator<<	(std::ostream& s, const VkPhysicalDeviceFloatControlsPropertiesKHR& value);
+std::ostream&	operator<<	(std::ostream& s, const VkSubpassDescriptionDepthStencilResolveKHR& value);
+std::ostream&	operator<<	(std::ostream& s, const VkPhysicalDeviceDepthStencilResolvePropertiesKHR& value);
 std::ostream&	operator<<	(std::ostream& s, const VkDebugReportCallbackCreateInfoEXT& value);
 std::ostream&	operator<<	(std::ostream& s, const VkPipelineRasterizationStateRasterizationOrderAMD& value);
 std::ostream&	operator<<	(std::ostream& s, const VkDebugMarkerObjectNameInfoEXT& value);
@@ -539,6 +543,9 @@ std::ostream&	operator<<	(std::ostream& s, const VkExportMemoryWin32HandleInfoNV
 std::ostream&	operator<<	(std::ostream& s, const VkWin32KeyedMutexAcquireReleaseInfoNV& value);
 std::ostream&	operator<<	(std::ostream& s, const VkValidationFlagsEXT& value);
 std::ostream&	operator<<	(std::ostream& s, const VkViSurfaceCreateInfoNN& value);
+std::ostream&	operator<<	(std::ostream& s, const VkConditionalRenderingBeginInfoEXT& value);
+std::ostream&	operator<<	(std::ostream& s, const VkPhysicalDeviceConditionalRenderingFeaturesEXT& value);
+std::ostream&	operator<<	(std::ostream& s, const VkCommandBufferInheritanceConditionalRenderingInfoEXT& value);
 std::ostream&	operator<<	(std::ostream& s, const VkDeviceGeneratedCommandsFeaturesNVX& value);
 std::ostream&	operator<<	(std::ostream& s, const VkDeviceGeneratedCommandsLimitsNVX& value);
 std::ostream&	operator<<	(std::ostream& s, const VkIndirectCommandsTokenNVX& value);
@@ -596,6 +603,13 @@ std::ostream&	operator<<	(std::ostream& s, const VkAndroidHardwareBufferFormatPr
 std::ostream&	operator<<	(std::ostream& s, const VkImportAndroidHardwareBufferInfoANDROID& value);
 std::ostream&	operator<<	(std::ostream& s, const VkMemoryGetAndroidHardwareBufferInfoANDROID& value);
 std::ostream&	operator<<	(std::ostream& s, const VkExternalFormatANDROID& value);
+std::ostream&	operator<<	(std::ostream& s, const VkImportMemoryHostPointerInfoEXT& value);
+std::ostream&	operator<<	(std::ostream& s, const VkMemoryHostPointerPropertiesEXT& value);
+std::ostream&	operator<<	(std::ostream& s, const VkPhysicalDeviceExternalMemoryHostPropertiesEXT& value);
+std::ostream&	operator<<	(std::ostream& s, const VkPhysicalDeviceVertexAttributeDivisorPropertiesEXT& value);
+std::ostream&	operator<<	(std::ostream& s, const VkVertexInputBindingDivisorDescriptionEXT& value);
+std::ostream&	operator<<	(std::ostream& s, const VkPipelineVertexInputDivisorStateCreateInfoEXT& value);
+std::ostream&	operator<<	(std::ostream& s, const VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT& value);
 std::ostream&	operator<<	(std::ostream& s, const VkDescriptorSetLayoutBindingFlagsCreateInfoEXT& value);
 std::ostream&	operator<<	(std::ostream& s, const VkPhysicalDeviceDescriptorIndexingFeaturesEXT& value);
 std::ostream&	operator<<	(std::ostream& s, const VkPhysicalDeviceDescriptorIndexingPropertiesEXT& value);

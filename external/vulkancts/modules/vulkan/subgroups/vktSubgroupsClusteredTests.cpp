@@ -50,72 +50,14 @@ enum OpType
 static bool checkVertexPipelineStages(std::vector<const void*> datas,
 									  deUint32 width, deUint32)
 {
-	const deUint32* data =
-		reinterpret_cast<const deUint32*>(datas[0]);
-	for (deUint32 x = 0; x < width; ++x)
-	{
-		deUint32 val = data[x];
-
-		if (0x1 != val)
-		{
-			return false;
-		}
-	}
-
-	return true;
+	return vkt::subgroups::check(datas, width, 1);
 }
 
 static bool checkCompute(std::vector<const void*> datas,
 						 const deUint32 numWorkgroups[3], const deUint32 localSize[3],
 						 deUint32)
 {
-	const deUint32* data =
-		reinterpret_cast<const deUint32*>(datas[0]);
-
-	for (deUint32 nX = 0; nX < numWorkgroups[0]; ++nX)
-	{
-		for (deUint32 nY = 0; nY < numWorkgroups[1]; ++nY)
-		{
-			for (deUint32 nZ = 0; nZ < numWorkgroups[2]; ++nZ)
-			{
-				for (deUint32 lX = 0; lX < localSize[0]; ++lX)
-				{
-					for (deUint32 lY = 0; lY < localSize[1]; ++lY)
-					{
-						for (deUint32 lZ = 0; lZ < localSize[2];
-								++lZ)
-						{
-							const deUint32 globalInvocationX =
-								nX * localSize[0] + lX;
-							const deUint32 globalInvocationY =
-								nY * localSize[1] + lY;
-							const deUint32 globalInvocationZ =
-								nZ * localSize[2] + lZ;
-
-							const deUint32 globalSizeX =
-								numWorkgroups[0] * localSize[0];
-							const deUint32 globalSizeY =
-								numWorkgroups[1] * localSize[1];
-
-							const deUint32 offset =
-								globalSizeX *
-								((globalSizeY *
-								  globalInvocationZ) +
-								 globalInvocationY) +
-								globalInvocationX;
-
-							if (0x1 != data[offset])
-							{
-								return false;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return true;
+	return vkt::subgroups::checkCompute(datas, numWorkgroups, localSize, 1);
 }
 
 std::string getOpTypeName(int opType)
@@ -369,16 +311,9 @@ struct CaseDefinition
 	VkFormat			format;
 };
 
-void initFrameBufferPrograms (SourceCollections& programCollection, CaseDefinition caseDef)
+std::string getBodySource(CaseDefinition caseDef)
 {
-	const vk::ShaderBuildOptions	buildOptions	(programCollection.usedVulkanVersion, vk::SPIRV_VERSION_1_3, 0u);
-	std::ostringstream				bdy;
-
-	subgroups::setFragmentShaderFrameBuffer(programCollection);
-
-	if (VK_SHADER_STAGE_VERTEX_BIT != caseDef.shaderStage)
-		subgroups::setVertexShaderFrameBuffer(programCollection);
-
+	std::ostringstream bdy;
 	bdy << "  bool tempResult = true;\n";
 
 	for (deUint32 i = 1; i <= subgroups::maxSupportedSubgroupSize(); i *= 2)
@@ -411,6 +346,19 @@ void initFrameBufferPrograms (SourceCollections& programCollection, CaseDefiniti
 			<< "    }\n"
 			<< "  }\n";
 	}
+	return bdy.str();
+}
+
+void initFrameBufferPrograms (SourceCollections& programCollection, CaseDefinition caseDef)
+{
+	const vk::ShaderBuildOptions	buildOptions	(programCollection.usedVulkanVersion, vk::SPIRV_VERSION_1_3, 0u);
+
+	subgroups::setFragmentShaderFrameBuffer(programCollection);
+
+	if (VK_SHADER_STAGE_VERTEX_BIT != caseDef.shaderStage)
+		subgroups::setVertexShaderFrameBuffer(programCollection);
+
+	std::string bdy = getBodySource(caseDef);
 
 	if (VK_SHADER_STAGE_VERTEX_BIT == caseDef.shaderStage)
 	{
@@ -428,7 +376,7 @@ void initFrameBufferPrograms (SourceCollections& programCollection, CaseDefiniti
 			<< "void main (void)\n"
 			<< "{\n"
 			<< "  uvec4 mask = subgroupBallot(true);\n"
-			<< bdy.str()
+			<< bdy
 			<< "  out_color = float(tempResult ? 1 : 0);\n"
 			<< "  gl_Position = in_position;\n"
 			<< "  gl_PointSize = 1.0f;\n"
@@ -454,7 +402,7 @@ void initFrameBufferPrograms (SourceCollections& programCollection, CaseDefiniti
 			<< "void main (void)\n"
 			<< "{\n"
 			<< "  uvec4 mask = subgroupBallot(true);\n"
-			<< bdy.str()
+			<< bdy
 			<< "  out_color = tempResult ? 1.0 : 0.0;\n"
 			<< "  gl_Position = gl_in[0].gl_Position;\n"
 			<< "  EmitVertex();\n"
@@ -486,7 +434,7 @@ void initFrameBufferPrograms (SourceCollections& programCollection, CaseDefiniti
 			<< "    gl_TessLevelOuter[1] = 1.0f;\n"
 			<< "  }\n"
 			<< "  uvec4 mask = subgroupBallot(true);\n"
-			<< bdy.str()
+			<< bdy
 			<< "  out_color[gl_InvocationID] = tempResult ? 1.0 : 0.0;\n"
 			<< "  gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;\n"
 			<< "}\n";
@@ -512,7 +460,7 @@ void initFrameBufferPrograms (SourceCollections& programCollection, CaseDefiniti
 			<< "void main (void)\n"
 			<< "{\n"
 			<< "  uvec4 mask = subgroupBallot(true);\n"
-			<< bdy.str()
+			<< bdy
 			<< "  out_color = tempResult ? 1.0 : 0.0;\n"
 			<< "  gl_Position = mix(gl_in[0].gl_Position, gl_in[1].gl_Position, gl_TessCoord.x);\n"
 			<< "}\n";
@@ -529,40 +477,7 @@ void initFrameBufferPrograms (SourceCollections& programCollection, CaseDefiniti
 
 void initPrograms(SourceCollections& programCollection, CaseDefinition caseDef)
 {
-	std::ostringstream bdy;
-
-	bdy << "  bool tempResult = true;\n";
-
-	for (deUint32 i = 1; i <= subgroups::maxSupportedSubgroupSize(); i *= 2)
-	{
-		bdy	<< "  {\n"
-			<< "    const uint clusterSize = " << i << ";\n"
-			<< "    if (clusterSize <= gl_SubgroupSize)\n"
-			<< "    {\n"
-			<< "      " << subgroups::getFormatNameForGLSL(caseDef.format) << " op = "
-			<< getOpTypeName(caseDef.opType) + "(data[gl_SubgroupInvocationID], clusterSize);\n"
-			<< "      for (uint clusterOffset = 0; clusterOffset < gl_SubgroupSize; clusterOffset += clusterSize)\n"
-			<< "      {\n"
-			<< "        " << subgroups::getFormatNameForGLSL(caseDef.format) << " ref = "
-			<< getIdentity(caseDef.opType, caseDef.format) << ";\n"
-			<< "        for (uint index = clusterOffset; index < (clusterOffset + clusterSize); index++)\n"
-			<< "        {\n"
-			<< "          if (subgroupBallotBitExtract(mask, index))\n"
-			<< "          {\n"
-			<< "            ref = " << getOpTypeOperation(caseDef.opType, caseDef.format, "ref", "data[index]") << ";\n"
-			<< "          }\n"
-			<< "        }\n"
-			<< "        if ((clusterOffset <= gl_SubgroupInvocationID) && (gl_SubgroupInvocationID < (clusterOffset + clusterSize)))\n"
-			<< "        {\n"
-			<< "          if (!" << getCompare(caseDef.opType, caseDef.format, "ref", "op") << ")\n"
-			<< "          {\n"
-			<< "            tempResult = false;\n"
-			<< "          }\n"
-			<< "        }\n"
-			<< "      }\n"
-			<< "    }\n"
-			<< "  }\n";
-	}
+	std::string bdy = getBodySource(caseDef);
 
 	if (VK_SHADER_STAGE_COMPUTE_BIT == caseDef.shaderStage)
 	{
@@ -589,7 +504,7 @@ void initPrograms(SourceCollections& programCollection, CaseDefinition caseDef)
 			"gl_GlobalInvocationID.z) + gl_GlobalInvocationID.y) + "
 			"gl_GlobalInvocationID.x;\n"
 			<< "  uvec4 mask = subgroupBallot(true);\n"
-			<< bdy.str()
+			<< bdy
 			<< "  result[offset] = tempResult ? 1 : 0;\n"
 			<< "}\n";
 
@@ -615,11 +530,12 @@ void initPrograms(SourceCollections& programCollection, CaseDefinition caseDef)
 				"void main (void)\n"
 				"{\n"
 				"  uvec4 mask = subgroupBallot(true);\n"
-				+ bdy.str() +
+				+ bdy +
 				"  result[gl_VertexIndex] = tempResult ? 1 : 0;\n"
 				"  float pixelSize = 2.0f/1024.0f;\n"
 				"  float pixelPosition = pixelSize/2.0f - 1.0f;\n"
 				"  gl_Position = vec4(float(gl_VertexIndex) * pixelSize + pixelPosition, 0.0f, 0.0f, 1.0f);\n"
+				"  gl_PointSize = 1.0f;\n"
 				"}\n";
 
 			programCollection.glslSources.add("vert")
@@ -644,7 +560,7 @@ void initPrograms(SourceCollections& programCollection, CaseDefinition caseDef)
 			"void main (void)\n"
 			"{\n"
 			"  uvec4 mask = subgroupBallot(true);\n"
-			+ bdy.str() +
+			+ bdy +
 			"  result[gl_PrimitiveID] = tempResult ? 1 : 0;\n"
 			"  if (gl_InvocationID == 0)\n"
 			"  {\n"
@@ -676,7 +592,7 @@ void initPrograms(SourceCollections& programCollection, CaseDefinition caseDef)
 				"void main (void)\n"
 				"{\n"
 				"  uvec4 mask = subgroupBallot(true);\n"
-				+ bdy.str() +
+				+ bdy +
 				"  result[gl_PrimitiveID * 2 + uint(gl_TessCoord.x + 0.5)] = tempResult ? 1 : 0;\n"
 				"  float pixelSize = 2.0f/1024.0f;\n"
 				"  gl_Position = gl_in[0].gl_Position + gl_TessCoord.x * pixelSize / 2.0f;\n"
@@ -704,7 +620,7 @@ void initPrograms(SourceCollections& programCollection, CaseDefinition caseDef)
 				"void main (void)\n"
 				"{\n"
 				"  uvec4 mask = subgroupBallot(true);\n"
-				+ bdy.str() +
+				+ bdy +
 				"  result[gl_PrimitiveIDIn] = tempResult ? 1 : 0;\n"
 				"  gl_Position = gl_in[0].gl_Position;\n"
 				"  EmitVertex();\n"
@@ -726,7 +642,7 @@ void initPrograms(SourceCollections& programCollection, CaseDefinition caseDef)
 				"void main (void)\n"
 				"{\n"
 				"  uvec4 mask = subgroupBallot(true);\n"
-				+ bdy.str() +
+				+ bdy +
 				"  result = tempResult ? 1 : 0;\n"
 				"}\n";
 			programCollection.glslSources.add("fragment")
@@ -849,8 +765,12 @@ namespace subgroups
 {
 tcu::TestCaseGroup* createSubgroupsClusteredTests(tcu::TestContext& testCtx)
 {
-	de::MovePtr<tcu::TestCaseGroup> group(new tcu::TestCaseGroup(
-			testCtx, "clustered", "Subgroup clustered category tests"));
+	de::MovePtr<tcu::TestCaseGroup> graphicGroup(new tcu::TestCaseGroup(
+		testCtx, "graphics", "Subgroup clustered category tests: graphics"));
+	de::MovePtr<tcu::TestCaseGroup> computeGroup(new tcu::TestCaseGroup(
+		testCtx, "compute", "Subgroup clustered category tests: compute"));
+	de::MovePtr<tcu::TestCaseGroup> framebufferGroup(new tcu::TestCaseGroup(
+		testCtx, "framebuffer", "Subgroup clustered category tests: framebuffer"));
 
 	const VkShaderStageFlags stages[] =
 	{
@@ -934,24 +854,30 @@ tcu::TestCaseGroup* createSubgroupsClusteredTests(tcu::TestContext& testCtx)
 
 			{
 				const CaseDefinition caseDef = {opTypeIndex, VK_SHADER_STAGE_COMPUTE_BIT, format};
-				addFunctionCaseWithPrograms(group.get(), name+"_" + getShaderStageName(caseDef.shaderStage),
-										"", supportedCheck, initPrograms, test, caseDef);
+				addFunctionCaseWithPrograms(computeGroup.get(), name, "", supportedCheck, initPrograms, test, caseDef);
 			}
 
 			{
 				const CaseDefinition caseDef = {opTypeIndex, VK_SHADER_STAGE_ALL_GRAPHICS, format};
-				addFunctionCaseWithPrograms(group.get(), name+"_graphic",
+				addFunctionCaseWithPrograms(graphicGroup.get(), name,
 										"", supportedCheck, initPrograms, test, caseDef);
 			}
 
 			for (int stageIndex = 0; stageIndex < DE_LENGTH_OF_ARRAY(stages); ++stageIndex)
 			{
 				const CaseDefinition caseDef = {opTypeIndex, stages[stageIndex], format};
-				addFunctionCaseWithPrograms(group.get(), name +"_" + getShaderStageName(caseDef.shaderStage) + "_framebuffer", "",
+				addFunctionCaseWithPrograms(framebufferGroup.get(), name +"_" + getShaderStageName(caseDef.shaderStage), "",
 											supportedCheck, initFrameBufferPrograms, noSSBOtest, caseDef);
 			}
 		}
 	}
+	de::MovePtr<tcu::TestCaseGroup> group(new tcu::TestCaseGroup(
+		testCtx, "clustered", "Subgroup clustered category tests"));
+
+	group->addChild(graphicGroup.release());
+	group->addChild(computeGroup.release());
+	group->addChild(framebufferGroup.release());
+
 	return group.release();
 }
 

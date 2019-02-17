@@ -26,6 +26,7 @@
 #include "vkImageUtil.hpp"
 #include "vkRefUtil.hpp"
 #include "vkQueryUtil.hpp"
+#include "vkTypeUtil.hpp"
 #include "tcuTextureUtil.hpp"
 
 namespace vk
@@ -2260,6 +2261,90 @@ CompressedFormatParameters	compressedFormatParameters[VK_FORMAT_ASTC_12x12_SRGB_
 	{ VK_FORMAT_ASTC_12x12_SRGB_BLOCK,		16,	12,	12 }
 };
 
+deUint32 getFormatComponentWidth (const VkFormat format, const deUint32 componentNdx)
+{
+	const tcu::TextureFormat	tcuFormat		(mapVkFormat(format));
+	const deUint32				componentCount	(tcu::getNumUsedChannels(tcuFormat.order));
+
+	if (componentNdx >= componentCount)
+		DE_FATAL("Component index out of range");
+	else
+	{
+		switch (tcuFormat.type)
+		{
+			case tcu::TextureFormat::UNORM_INT8:
+			case tcu::TextureFormat::SNORM_INT8:
+			case tcu::TextureFormat::UNSIGNED_INT8:
+			case tcu::TextureFormat::SIGNED_INT8:
+				return 8;
+
+			case tcu::TextureFormat::UNORM_SHORT_12:
+				return 12;
+
+			case tcu::TextureFormat::UNORM_INT16:
+			case tcu::TextureFormat::SNORM_INT16:
+			case tcu::TextureFormat::UNSIGNED_INT16:
+			case tcu::TextureFormat::SIGNED_INT16:
+				return 16;
+
+			case tcu::TextureFormat::UNORM_INT24:
+			case tcu::TextureFormat::UNSIGNED_INT24:
+				return 24;
+
+			case tcu::TextureFormat::UNORM_INT32:
+			case tcu::TextureFormat::SNORM_INT32:
+			case tcu::TextureFormat::UNSIGNED_INT32:
+			case tcu::TextureFormat::SIGNED_INT32:
+				return 32;
+
+			case tcu::TextureFormat::FLOAT64:
+			return 64;
+
+			// Packed formats
+			case tcu::TextureFormat::UNORM_SHORT_4444:
+			case tcu::TextureFormat::UNSIGNED_SHORT_4444:
+			return 4;
+
+			case tcu::TextureFormat::UNORM_SHORT_565:
+			case tcu::TextureFormat::UNSIGNED_SHORT_565:
+				return (componentNdx == 1 ? 6 : 5);
+
+			case tcu::TextureFormat::UNSIGNED_INT_24_8:
+			case tcu::TextureFormat::UNSIGNED_INT_24_8_REV:
+			case tcu::TextureFormat::FLOAT_UNSIGNED_INT_24_8_REV:
+				return (componentNdx == 0 ? 24 : 8);
+
+			case tcu::TextureFormat::UNORM_SHORT_1555:
+				return (componentNdx == 0 ? 1 : 5);
+
+			case tcu::TextureFormat::UNORM_INT_1010102_REV:
+			case tcu::TextureFormat::SNORM_INT_1010102_REV:
+			case tcu::TextureFormat::UNSIGNED_INT_1010102_REV:
+			case tcu::TextureFormat::SIGNED_INT_1010102_REV:
+				return (componentNdx == 3 ? 2 : 10);
+
+			default:
+				DE_FATAL("Format unimplemented");
+		}
+	}
+
+	return 0;
+}
+
+float getRepresentableDiffUnorm (const VkFormat format, const deUint32 componentNdx)
+{
+	const deUint32 size (getFormatComponentWidth(format, componentNdx));
+
+	return 1.0f / float((1 << (size)) - 1);
+}
+
+float getRepresentableDiffSnorm (const VkFormat format, const deUint32 componentNdx)
+{
+	const deUint32 size (getFormatComponentWidth(format, componentNdx));
+
+	return 1.0f / float((1 << (size - 1)) - 1);
+}
+
 deUint32 getBlockSizeInBytes (const VkFormat compressedFormat)
 {
 	deUint32 formatNdx = static_cast<deUint32>(compressedFormat - VK_FORMAT_BC1_RGB_UNORM_BLOCK);
@@ -2395,7 +2480,7 @@ static VkBorderColor mapBorderColor (tcu::TextureChannelClass channelClass, cons
 	return VK_BORDER_COLOR_LAST;
 }
 
-VkSamplerCreateInfo mapSampler (const tcu::Sampler& sampler, const tcu::TextureFormat& format, float minLod, float maxLod)
+VkSamplerCreateInfo mapSampler (const tcu::Sampler& sampler, const tcu::TextureFormat& format, float minLod, float maxLod, bool unnormal)
 {
 	const bool					compareEnabled	= (sampler.compare != tcu::Sampler::COMPAREMODE_NONE);
 	const VkCompareOp			compareOp		= (compareEnabled) ? (mapCompareMode(sampler.compare)) : (VK_COMPARE_OP_ALWAYS);
@@ -2419,7 +2504,7 @@ VkSamplerCreateInfo mapSampler (const tcu::Sampler& sampler, const tcu::TextureF
 		(VkBool32)(compareEnabled ? VK_TRUE : VK_FALSE),			// compareEnable
 		compareOp,													// compareOp
 		(isMipmapEnabled ? minLod : 0.0f),							// minLod
-		(isMipmapEnabled ? maxLod : 0.25f),							// maxLod
+		(isMipmapEnabled ? maxLod : (unnormal ? 0.0f : 0.25f)),		// maxLod
 		borderColor,												// borderColor
 		(VkBool32)(sampler.normalizedCoords ? VK_FALSE : VK_TRUE),	// unnormalizedCoords
 	};
@@ -2687,23 +2772,17 @@ tcu::UVec3 alignedDivide (const VkExtent3D& extent, const VkExtent3D& divisor)
 }
 
 void copyBufferToImage (const DeviceInterface&					vk,
-						VkDevice								device,
-						VkQueue									queue,
-						deUint32								queueFamilyIndex,
+						const VkCommandBuffer&					cmdBuffer,
 						const VkBuffer&							buffer,
-						deUint32								bufferSize,
+						VkDeviceSize							bufferSize,
 						const std::vector<VkBufferImageCopy>&	copyRegions,
-						const VkSemaphore*						waitSemaphore,
 						VkImageAspectFlags						imageAspectFlags,
 						deUint32								mipLevels,
 						deUint32								arrayLayers,
 						VkImage									destImage,
-						VkImageLayout							destImageLayout)
+						VkImageLayout							destImageLayout,
+						VkPipelineStageFlags					destImageDstStageFlags)
 {
-	Move<VkCommandPool>		cmdPool		= createCommandPool(vk, device, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, queueFamilyIndex);
-	Move<VkCommandBuffer>	cmdBuffer	= allocateCommandBuffer(vk, device, *cmdPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-	Move<VkFence>			fence		= createFence(vk, device);
-
 	// Barriers for copying buffer to image
 	const VkBufferMemoryBarrier preBufferBarrier =
 	{
@@ -2758,6 +2837,31 @@ void copyBufferToImage (const DeviceInterface&					vk,
 		}
 	};
 
+	// Copy buffer to image
+	vk.cmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, (VkDependencyFlags)0, 0, (const VkMemoryBarrier*)DE_NULL, 1, &preBufferBarrier, 1, &preImageBarrier);
+	vk.cmdCopyBufferToImage(cmdBuffer, buffer, destImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (deUint32)copyRegions.size(), copyRegions.data());
+	vk.cmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, destImageDstStageFlags, (VkDependencyFlags)0, 0, (const VkMemoryBarrier*)DE_NULL, 0, (const VkBufferMemoryBarrier*)DE_NULL, 1, &postImageBarrier);
+}
+
+void copyBufferToImage (const DeviceInterface&					vk,
+						VkDevice								device,
+						VkQueue									queue,
+						deUint32								queueFamilyIndex,
+						const VkBuffer&							buffer,
+						VkDeviceSize							bufferSize,
+						const std::vector<VkBufferImageCopy>&	copyRegions,
+						const VkSemaphore*						waitSemaphore,
+						VkImageAspectFlags						imageAspectFlags,
+						deUint32								mipLevels,
+						deUint32								arrayLayers,
+						VkImage									destImage,
+						VkImageLayout							destImageLayout,
+						VkPipelineStageFlags					destImageDstStageFlags)
+{
+	Move<VkCommandPool>		cmdPool		= createCommandPool(vk, device, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, queueFamilyIndex);
+	Move<VkCommandBuffer>	cmdBuffer	= allocateCommandBuffer(vk, device, *cmdPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+	Move<VkFence>			fence		= createFence(vk, device);
+
 	const VkCommandBufferBeginInfo cmdBufferBeginInfo =
 	{
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,	// VkStructureType					sType;
@@ -2766,11 +2870,8 @@ void copyBufferToImage (const DeviceInterface&					vk,
 		(const VkCommandBufferInheritanceInfo*)DE_NULL,
 	};
 
-	// Copy buffer to image
 	VK_CHECK(vk.beginCommandBuffer(*cmdBuffer, &cmdBufferBeginInfo));
-	vk.cmdPipelineBarrier(*cmdBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, (VkDependencyFlags)0, 0, (const VkMemoryBarrier*)DE_NULL, 1, &preBufferBarrier, 1, &preImageBarrier);
-	vk.cmdCopyBufferToImage(*cmdBuffer, buffer, destImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, (deUint32)copyRegions.size(), copyRegions.data());
-	vk.cmdPipelineBarrier(*cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, (VkDependencyFlags)0, 0, (const VkMemoryBarrier*)DE_NULL, 0, (const VkBufferMemoryBarrier*)DE_NULL, 1, &postImageBarrier);
+	copyBufferToImage(vk, *cmdBuffer, buffer, bufferSize, copyRegions, imageAspectFlags, mipLevels, arrayLayers, destImage, destImageLayout, destImageDstStageFlags);
 	VK_CHECK(vk.endCommandBuffer(*cmdBuffer));
 
 	const VkPipelineStageFlags pipelineStageFlags = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
@@ -2798,6 +2899,69 @@ void copyBufferToImage (const DeviceInterface&					vk,
 		VK_CHECK(vk.deviceWaitIdle(device));
 		throw;
 	}
+}
+
+void copyImageToBuffer (const DeviceInterface&	vk,
+						VkCommandBuffer			cmdBuffer,
+						VkImage					image,
+						VkBuffer				buffer,
+						tcu::IVec2				size,
+						VkAccessFlags			srcAccessMask,
+						VkImageLayout			oldLayout,
+						deUint32				numLayers)
+{
+	const VkImageMemoryBarrier	imageBarrier	=
+	{
+		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,										// VkStructureType			sType;
+		DE_NULL,																	// const void*				pNext;
+		srcAccessMask,																// VkAccessFlags			srcAccessMask;
+		VK_ACCESS_TRANSFER_READ_BIT,												// VkAccessFlags			dstAccessMask;
+		oldLayout,																	// VkImageLayout			oldLayout;
+		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,										// VkImageLayout			newLayout;
+		VK_QUEUE_FAMILY_IGNORED,													// deUint32					srcQueueFamilyIndex;
+		VK_QUEUE_FAMILY_IGNORED,													// deUint32					destQueueFamilyIndex;
+		image,																		// VkImage					image;
+		makeImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0, numLayers)	// VkImageSubresourceRange	subresourceRange;
+	};
+
+	vk.cmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0u,
+						  0u, DE_NULL, 0u, DE_NULL, 1u, &imageBarrier);
+
+	const VkImageSubresourceLayers	subresource	=
+	{
+		VK_IMAGE_ASPECT_COLOR_BIT,					// VkImageAspectFlags	aspectMask;
+		0u,											// deUint32				mipLevel;
+		0u,											// deUint32				baseArrayLayer;
+		numLayers									// deUint32				layerCount;
+	};
+
+	const VkBufferImageCopy			region		=
+	{
+		0ull,										// VkDeviceSize					bufferOffset;
+		0u,											// deUint32						bufferRowLength;
+		0u,											// deUint32						bufferImageHeight;
+		subresource,								// VkImageSubresourceLayers		imageSubresource;
+		makeOffset3D(0, 0, 0),						// VkOffset3D					imageOffset;
+		makeExtent3D(size.x(), size.y(), 1u)		// VkExtent3D					imageExtent;
+	};
+
+	vk.cmdCopyImageToBuffer(cmdBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buffer, 1u, &region);
+
+	const VkBufferMemoryBarrier	bufferBarrier =
+	{
+		VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,	// VkStructureType	sType;
+		DE_NULL,									// const void*		pNext;
+		VK_ACCESS_TRANSFER_WRITE_BIT,				// VkAccessFlags	srcAccessMask;
+		VK_ACCESS_HOST_READ_BIT,					// VkAccessFlags	dstAccessMask;
+		VK_QUEUE_FAMILY_IGNORED,					// deUint32			srcQueueFamilyIndex;
+		VK_QUEUE_FAMILY_IGNORED,					// deUint32			dstQueueFamilyIndex;
+		buffer,										// VkBuffer			buffer;
+		0ull,										// VkDeviceSize		offset;
+		VK_WHOLE_SIZE								// VkDeviceSize		size;
+	};
+
+	vk.cmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0u,
+						  0u, DE_NULL, 1u, &bufferBarrier, 0u, DE_NULL);
 }
 
 void allocateAndBindSparseImage (const DeviceInterface&						vk,

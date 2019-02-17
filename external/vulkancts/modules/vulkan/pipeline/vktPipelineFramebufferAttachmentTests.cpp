@@ -31,6 +31,7 @@
 #include "vktTestGroupUtil.hpp"
 
 #include "vkMemUtil.hpp"
+#include "vkBarrierUtil.hpp"
 #include "vkQueryUtil.hpp"
 #include "vkTypeUtil.hpp"
 #include "vkRefUtil.hpp"
@@ -437,7 +438,7 @@ tcu::TestStatus test (Context& context, const CaseDef caseDef)
 		vertexBufferAlloc	= bindBuffer(vk, device, allocator, *vertexBuffer, MemoryRequirement::HostVisible);
 
 		deMemcpy(vertexBufferAlloc->getHostPtr(), &vertices[0], static_cast<std::size_t>(vertexBufferSize));
-		flushMappedMemoryRange(vk, device, vertexBufferAlloc->getMemory(), vertexBufferAlloc->getOffset(), vertexBufferSize);
+		flushAlloc(vk, device, *vertexBufferAlloc);
 	}
 
 	// create colorImage (and msColorImage) using the configured attachmentsize
@@ -648,7 +649,7 @@ tcu::TestStatus test (Context& context, const CaseDef caseDef)
 
 	// Verify results
 	{
-		invalidateMappedMemoryRange(vk, device, colorBufferAlloc->getMemory(), colorBufferAlloc->getOffset(), VK_WHOLE_SIZE);
+		invalidateAlloc(vk, device, *colorBufferAlloc);
 		const tcu::TextureFormat			format			= mapVkFormat(COLOR_FORMAT);
 		const int							depth			= deMax32(caseDef.attachmentSize.z(), caseDef.numLayers);
 		tcu::TextureLevel					textureLevel	(format, caseDef.attachmentSize.x(), caseDef.attachmentSize.y(), depth);
@@ -673,11 +674,13 @@ void initImagePrograms (SourceCollections& programCollection, const bool multisa
 			<< "\n"
 			<< "out gl_PerVertex {\n"
 			<< "	vec4 gl_Position;\n"
+			<< "	float gl_PointSize;\n"
 			<< "};\n"
 			<< "\n"
 			<< "void main(void)\n"
 			<< "{\n"
 			<< "	gl_Position	= in_position;\n"
+			<< "	gl_PointSize = 1.0f;\n"
 			<< "}\n";
 
 		programCollection.glslSources.add("vert") << glu::VertexSource(src.str());
@@ -845,7 +848,7 @@ tcu::TestStatus testNoAtt (Context& context, const bool multisample)
 		vertexBuffer		= makeBuffer(vk, device, vertexBufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 		vertexBufferAlloc	= bindBuffer(vk, device, allocator, *vertexBuffer, MemoryRequirement::HostVisible);
 		deMemcpy(vertexBufferAlloc->getHostPtr(), &vertices[0], static_cast<std::size_t>(vertexBufferSize));
-		flushMappedMemoryRange(vk, device, vertexBufferAlloc->getMemory(), vertexBufferAlloc->getOffset(), vertexBufferSize);
+		flushAlloc(vk, device, *vertexBufferAlloc);
 	}
 
 	// Create render pass and pipeline
@@ -939,7 +942,7 @@ tcu::TestStatus testNoAtt (Context& context, const bool multisample)
 
 	// Verify results
 	{
-		invalidateMappedMemoryRange(vk, device, colorBufferAlloc->getMemory(), colorBufferAlloc->getOffset(), VK_WHOLE_SIZE);
+		invalidateAlloc(vk, device, *colorBufferAlloc);
 		const tcu::TextureFormat			format			= mapVkFormat(COLOR_FORMAT);
 		tcu::TextureLevel					textureLevel	(format, imageWidth, imageHeight, imageDepth);
 		const tcu::PixelBufferAccess		expectedImage	= getExpectedDataNoAtt(textureLevel);
@@ -1096,7 +1099,7 @@ tcu::TestStatus testDifferentAttachmentSizes (Context& context, const CaseDef ca
 		vertexBufferAlloc							= bindBuffer(vk, device, allocator, *vertexBuffer, MemoryRequirement::HostVisible);
 
 		deMemcpy(vertexBufferAlloc->getHostPtr(), &vertices[0], static_cast<std::size_t>(vertexBufferSize));
-		flushMappedMemoryRange(vk, device, vertexBufferAlloc->getMemory(), vertexBufferAlloc->getOffset(), vertexBufferSize);
+		flushAlloc(vk, device, *vertexBufferAlloc);
 	}
 
 	// create colorImages (and msColorImages) using the configured attachmentsize
@@ -1306,7 +1309,7 @@ tcu::TestStatus testDifferentAttachmentSizes (Context& context, const CaseDef ca
 			tcu::Vec4(0.25f, 0.5f, 1.0, 1.0f)
 		};
 
-		invalidateMappedMemoryRange(vk, device, colorBufferAllocs[renderTargetIdx]->getMemory(), colorBufferAllocs[renderTargetIdx]->getOffset(), VK_WHOLE_SIZE);
+		invalidateAlloc(vk, device, *colorBufferAllocs[renderTargetIdx]);
 
 		for (int z = 0; z < expectedImage.getDepth(); ++z)
 		{

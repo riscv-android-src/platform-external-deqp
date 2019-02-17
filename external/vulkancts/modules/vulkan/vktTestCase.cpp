@@ -32,11 +32,18 @@
 #include "vkDebugReportUtil.hpp"
 
 #include "tcuCommandLine.hpp"
+#include "tcuTestLog.hpp"
 
 #include "deSTLUtil.hpp"
 #include "deMemory.h"
 
+#if defined(DEQP_HAVE_VKRUNNER)
+#include <vkrunner/vkrunner.h>
+#endif
+
 #include <set>
+
+struct vk_executor;
 
 namespace vkt
 {
@@ -158,6 +165,7 @@ vector<string> addCoreDeviceExtensions(const vector<string>& extensions, deUint3
 deUint32 getTargetInstanceVersion (const PlatformInterface& vkp)
 {
 	deUint32 version = pack(ApiVersion(1, 0, 0));
+
 	if (vkp.enumerateInstanceVersion(&version) != VK_SUCCESS)
 		TCU_THROW(InternalError, "Enumerate instance version error");
 	return version;
@@ -311,10 +319,12 @@ public:
 	VkPhysicalDevice8BitStorageFeaturesKHR				eightBitStorageFeatures;
 	VkPhysicalDevice16BitStorageFeatures				sixteenBitStorageFeatures;
 	VkPhysicalDeviceVariablePointerFeatures				variablePointerFeatures;
+	VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT	vertexAttributeDivisorFeatures;
 	VkPhysicalDeviceDescriptorIndexingFeaturesEXT		descriptorIndexingFeatures;
 	VkPhysicalDeviceInlineUniformBlockFeaturesEXT		inlineUniformBlockFeatures;
 	VkPhysicalDeviceVulkanMemoryModelFeaturesKHR		vulkanMemoryModelFeatures;
 	VkPhysicalDeviceShaderAtomicInt64FeaturesKHR		shaderAtomicInt64Features;
+	VkPhysicalDeviceConditionalRenderingFeaturesEXT		conditionalRenderingFeatures;
 	VkPhysicalDeviceScalarBlockLayoutFeaturesEXT		scalarBlockLayoutFeatures;
 	VkPhysicalDeviceFloat16Int8FeaturesKHR				float16Int8Features;
 
@@ -331,10 +341,14 @@ public:
 		deMemset(&variablePointerFeatures, 0, sizeof(variablePointerFeatures));
 		deMemset(&descriptorIndexingFeatures, 0, sizeof(descriptorIndexingFeatures));
 		deMemset(&inlineUniformBlockFeatures, 0, sizeof(inlineUniformBlockFeatures));
+		deMemset(&float16Int8Features, 0, sizeof(float16Int8Features));
+		deMemset(&vertexAttributeDivisorFeatures, 0, sizeof(vertexAttributeDivisorFeatures));
+		deMemset(&descriptorIndexingFeatures, 0, sizeof(descriptorIndexingFeatures));
+		deMemset(&inlineUniformBlockFeatures, 0, sizeof(inlineUniformBlockFeatures));
 		deMemset(&vulkanMemoryModelFeatures, 0, sizeof(vulkanMemoryModelFeatures));
 		deMemset(&shaderAtomicInt64Features, 0, sizeof(shaderAtomicInt64Features));
+		deMemset(&conditionalRenderingFeatures, 0, sizeof(conditionalRenderingFeatures));
 		deMemset(&scalarBlockLayoutFeatures, 0, sizeof(scalarBlockLayoutFeatures));
-		deMemset(&float16Int8Features, 0, sizeof(float16Int8Features));
 
 		coreFeatures.sType						= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 		samplerYCbCrConversionFeatures.sType	= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES;
@@ -343,10 +357,14 @@ public:
 		variablePointerFeatures.sType			= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTER_FEATURES_KHR;
 		descriptorIndexingFeatures.sType		= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
 		inlineUniformBlockFeatures.sType		= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INLINE_UNIFORM_BLOCK_FEATURES_EXT;
+		float16Int8Features.sType				= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT16_INT8_FEATURES_KHR;
+		vertexAttributeDivisorFeatures.sType	= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_FEATURES_EXT;
+		descriptorIndexingFeatures.sType		= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+		inlineUniformBlockFeatures.sType		= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INLINE_UNIFORM_BLOCK_FEATURES_EXT;
 		vulkanMemoryModelFeatures.sType			= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES_KHR;
 		shaderAtomicInt64Features.sType			= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES_KHR;
+		conditionalRenderingFeatures.sType		= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONDITIONAL_RENDERING_FEATURES_EXT;
 		scalarBlockLayoutFeatures.sType			= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES_EXT;
-		float16Int8Features.sType				= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT16_INT8_FEATURES_KHR;
 
 		vector<VkExtensionProperties> deviceExtensionProperties =
 			enumerateDeviceExtensionProperties(vki, physicalDevice, DE_NULL);
@@ -385,6 +403,16 @@ public:
 				*nextPtr	= &inlineUniformBlockFeatures;
 				nextPtr		= &inlineUniformBlockFeatures.pNext;
 			}
+			if (de::contains(deviceExtensions.begin(), deviceExtensions.end(), "VK_KHR_shader_float16_int8"))
+			{
+				*nextPtr	= &float16Int8Features;
+				nextPtr		= &float16Int8Features.pNext;
+			}
+			if (de::contains(deviceExtensions.begin(), deviceExtensions.end(), "VK_EXT_vertex_attribute_divisor"))
+			{
+				*nextPtr	= &vertexAttributeDivisorFeatures;
+				nextPtr		= &vertexAttributeDivisorFeatures.pNext;
+			}
 			if (de::contains(deviceExtensions.begin(), deviceExtensions.end(), "VK_KHR_vulkan_memory_model"))
 			{
 				for (size_t i = 0; i < deviceExtensionProperties.size(); ++i)
@@ -405,15 +433,15 @@ public:
 				*nextPtr	= &shaderAtomicInt64Features;
 				nextPtr		= &shaderAtomicInt64Features.pNext;
 			}
+			if (de::contains(deviceExtensions.begin(), deviceExtensions.end(), "VK_EXT_conditional_rendering"))
+			{
+				*nextPtr	= &conditionalRenderingFeatures;
+				nextPtr		= &conditionalRenderingFeatures.pNext;
+			}
 			if (de::contains(deviceExtensions.begin(), deviceExtensions.end(), "VK_EXT_scalar_block_layout"))
 			{
 				*nextPtr	= &scalarBlockLayoutFeatures;
 				nextPtr		= &scalarBlockLayoutFeatures.pNext;
-			}
-			if (de::contains(deviceExtensions.begin(), deviceExtensions.end(), "VK_KHR_shader_float16_int8"))
-			{
-				*nextPtr	= &float16Int8Features;
-				nextPtr		= &float16Int8Features.pNext;
 			}
 
 			vki.getPhysicalDeviceFeatures2(physicalDevice, &coreFeatures);
@@ -447,8 +475,10 @@ public:
 	const VkPhysicalDevice8BitStorageFeaturesKHR&			get8BitStorageFeatures				(void) const	{ return m_deviceFeatures.eightBitStorageFeatures;			}
 	const VkPhysicalDevice16BitStorageFeatures&				get16BitStorageFeatures				(void) const	{ return m_deviceFeatures.sixteenBitStorageFeatures;		}
 	const VkPhysicalDeviceVariablePointerFeatures&			getVariablePointerFeatures			(void) const	{ return m_deviceFeatures.variablePointerFeatures;			}
+	const VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT&getVertexAttributeDivisorFeatures	(void) const	{ return m_deviceFeatures.vertexAttributeDivisorFeatures;	}
 	const VkPhysicalDeviceVulkanMemoryModelFeaturesKHR&		getVulkanMemoryModelFeatures		(void) const	{ return m_deviceFeatures.vulkanMemoryModelFeatures;	}
 	const VkPhysicalDeviceShaderAtomicInt64FeaturesKHR&		getShaderAtomicInt64Features		(void) const	{ return m_deviceFeatures.shaderAtomicInt64Features;	}
+	const VkPhysicalDeviceConditionalRenderingFeaturesEXT&	getConditionalRenderingFeatures		(void) const	{ return m_deviceFeatures.conditionalRenderingFeatures;	}
 	const VkPhysicalDeviceScalarBlockLayoutFeaturesEXT&		getScalarBlockLayoutFeatures		(void) const	{ return m_deviceFeatures.scalarBlockLayoutFeatures;	}
 	const VkPhysicalDeviceFloat16Int8FeaturesKHR&			getFloat16Int8Features				(void) const	{ return m_deviceFeatures.float16Int8Features;				}
 	VkDevice												getDevice							(void) const	{ return *m_device;											}
@@ -550,6 +580,18 @@ vk::Allocator* createAllocator (DefaultDevice* device)
 
 // Context
 
+void Context::errorCb(const char* message,
+					  void* user_data)
+{
+	Context* context = (Context*) user_data;
+
+	context->getTestContext().getLog()
+		<< tcu::TestLog::Message
+		<< message
+		<< "\n"
+		<< tcu::TestLog::EndMessage;
+}
+
 Context::Context (tcu::TestContext&				testCtx,
 				  const vk::PlatformInterface&	platformInterface,
 				  vk::BinaryCollection&			progCollection)
@@ -559,10 +601,26 @@ Context::Context (tcu::TestContext&				testCtx,
 	, m_device				(new DefaultDevice(m_platformInterface, testCtx.getCommandLine()))
 	, m_allocator			(createAllocator(m_device.get()))
 {
+#if defined(DEQP_HAVE_VKRUNNER)
+	m_config = vr_config_new();
+	vr_config_set_user_data(m_config, this);
+	vr_config_set_error_cb(m_config, errorCb);
+	m_executor = vr_executor_new(m_config);
+	vr_executor_set_device(m_executor,
+						   getInstanceProc,
+						   this,
+						   getPhysicalDevice(),
+						   getUniversalQueueFamilyIndex(),
+						   getDevice());
+#endif
 }
 
 Context::~Context (void)
 {
+#if defined(DEQP_HAVE_VKRUNNER)
+	vr_config_free(m_config);
+	vr_executor_free(m_executor);
+#endif
 }
 
 deUint32								Context::getAvailableInstanceVersion	(void) const { return m_device->getAvailableInstanceVersion();	}
@@ -582,10 +640,14 @@ const vk::VkPhysicalDevice16BitStorageFeatures&
 										Context::get16BitStorageFeatures		(void) const { return m_device->get16BitStorageFeatures();		}
 const vk::VkPhysicalDeviceVariablePointerFeatures&
 										Context::getVariablePointerFeatures		(void) const { return m_device->getVariablePointerFeatures();	}
+const vk::VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT&
+										Context::getVertexAttributeDivisorFeatures	(void) const { return m_device->getVertexAttributeDivisorFeatures();	}
 const vk::VkPhysicalDeviceVulkanMemoryModelFeaturesKHR&
 										Context::getVulkanMemoryModelFeatures	(void) const { return m_device->getVulkanMemoryModelFeatures();	}
 const vk::VkPhysicalDeviceShaderAtomicInt64FeaturesKHR&
 										Context::getShaderAtomicInt64Features	(void) const { return m_device->getShaderAtomicInt64Features();	}
+const vk::VkPhysicalDeviceConditionalRenderingFeaturesEXT&
+										Context::getConditionalRenderingFeatures(void) const { return m_device->getConditionalRenderingFeatures();	}
 const vk::VkPhysicalDeviceScalarBlockLayoutFeaturesEXT&
 										Context::getScalarBlockLayoutFeatures	(void) const { return m_device->getScalarBlockLayoutFeatures();	}
 const vk::VkPhysicalDeviceFloat16Int8FeaturesKHR&
@@ -600,6 +662,8 @@ deUint32								Context::getSparseQueueFamilyIndex		(void) const { return m_devi
 vk::VkQueue								Context::getSparseQueue					(void) const { return m_device->getSparseQueue();				}
 vk::Allocator&							Context::getDefaultAllocator			(void) const { return *m_allocator;								}
 deUint32								Context::getUsedApiVersion				(void) const { return m_device->getUsedApiVersion();			}
+vr_executor*							Context::getExecutor					(void) const
+																							{ return m_executor; }
 bool									Context::contextSupports				(const deUint32 majorNum, const deUint32 minorNum, const deUint32 patchNum) const
 																							{ return m_device->getUsedApiVersion() >= VK_MAKE_VERSION(majorNum, minorNum, patchNum); }
 bool									Context::contextSupports				(const ApiVersion version) const
@@ -705,6 +769,12 @@ bool Context::requireDeviceCoreFeature (const DeviceCoreFeature requiredFeature)
 		TCU_THROW(NotSupportedError, "Requested core feature is not supported: " + std::string(deviceCoreFeaturesTable[requiredFeatureIndex].featureName));
 
 	return true;
+}
+
+void* Context::getInstanceProc (const char* name, void* user_data)
+{
+	Context *context = (Context*) user_data;
+	return (void*) context->m_platformInterface.getInstanceProcAddr(context->getInstance(), name);
 }
 
 // TestCase

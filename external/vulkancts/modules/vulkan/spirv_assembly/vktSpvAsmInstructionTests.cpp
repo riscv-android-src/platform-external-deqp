@@ -68,6 +68,9 @@
 #include "vktTestCaseUtil.hpp"
 #include "vktSpvAsmLoopDepLenTests.hpp"
 #include "vktSpvAsmLoopDepInfTests.hpp"
+#include "vktSpvAsmCompositeInsertTests.hpp"
+#include "vktSpvAsmVaryingNameTests.hpp"
+#include "vktSpvAsmWorkgroupMemoryTests.hpp"
 
 #include <cmath>
 #include <limits>
@@ -99,6 +102,7 @@ using de::UniquePtr;
 using tcu::StringTemplate;
 using tcu::Vec4;
 
+const bool TEST_WITH_NAN	= true;
 const bool TEST_WITHOUT_NAN	= false;
 
 template<typename T>
@@ -373,6 +377,7 @@ tcu::TestCaseGroup* createOpNopGroup (tcu::TestContext& testCtx)
 	return group.release();
 }
 
+template<bool nanSupported>
 bool compareFUnord (const std::vector<Resource>& inputs, const vector<AllocationSp>& outputAllocs, const std::vector<Resource>& expectedOutputs, TestLog& log)
 {
 	if (outputAllocs.size() != 1)
@@ -394,6 +399,9 @@ bool compareFUnord (const std::vector<Resource>& inputs, const vector<Allocation
 
 	for (size_t idx = 0; idx < expectedBytes.size() / sizeof(deInt32); ++idx)
 	{
+		if (!nanSupported && (tcu::Float32(input1AsFloat[idx]).isNaN() || tcu::Float32(input2AsFloat[idx]).isNaN()))
+			continue;
+
 		if (outputAsInt[idx] != expectedOutputAsInt[idx])
 		{
 			log << TestLog::Message << "ERROR: Sub-case failed. inputs: " << input1AsFloat[idx] << "," << input2AsFloat[idx] << " output: " << outputAsInt[idx]<< " expected output: " << expectedOutputAsInt[idx] << TestLog::EndMessage;
@@ -423,17 +431,19 @@ do { \
 	cases.push_back(OpFUnordCase(#NAME, OPCODE, compare_##NAME::compare)); \
 } while (deGetFalse())
 
-tcu::TestCaseGroup* createOpFUnordGroup (tcu::TestContext& testCtx)
+tcu::TestCaseGroup* createOpFUnordGroup (tcu::TestContext& testCtx, const bool nanSupported)
 {
-	de::MovePtr<tcu::TestCaseGroup>	group			(new tcu::TestCaseGroup(testCtx, "opfunord", "Test the OpFUnord* opcodes"));
+	const string					nan				= nanSupported ? "_nan" : "";
+	const string					groupName		= "opfunord" + nan;
+	de::MovePtr<tcu::TestCaseGroup>	group			(new tcu::TestCaseGroup(testCtx, groupName.c_str(), "Test the OpFUnord* opcodes"));
 	de::Random						rnd				(deStringHash(group->getName()));
 	const int						numElements		= 100;
 	vector<OpFUnordCase>			cases;
-
+	string							extensions		= nanSupported ? "OpExtension \"SPV_KHR_float_controls\"\n" : "";
+	string							capabilities	= nanSupported ? "OpCapability SignedZeroInfNanPreserve\n" : "";
+	string                          exeModes        = nanSupported ? "OpExecutionMode %main SignedZeroInfNanPreserve 32\n" : "";
 	const StringTemplate			shaderTemplate	(
-
-		string(getComputeAsmShaderPreamble()) +
-
+		string(getComputeAsmShaderPreamble(capabilities, extensions, exeModes)) +
 		"OpSource GLSL 430\n"
 		"OpName %main           \"main\"\n"
 		"OpName %id             \"gl_GlobalInvocationID\"\n"
@@ -525,7 +535,12 @@ tcu::TestCaseGroup* createOpFUnordGroup (tcu::TestContext& testCtx)
 		spec.inputs.push_back(BufferSp(new Float32Buffer(inputFloats2)));
 		spec.outputs.push_back(BufferSp(new Int32Buffer(expectedInts)));
 		spec.numWorkGroups = IVec3(numElements, 1, 1);
-		spec.verifyIO = &compareFUnord;
+		spec.verifyIO = nanSupported ? &compareFUnord<true> : &compareFUnord<false>;
+		if (nanSupported)
+		{
+			spec.extensions.push_back("VK_KHR_shader_float_controls");
+			spec.requestedVulkanFeatures.floatControlsProperties.shaderSignedZeroInfNanPreserveFloat32 = DE_TRUE;
+		}
 		group->addChild(new SpvAsmComputeShaderCase(testCtx, cases[caseNdx].name, cases[caseNdx].name, spec));
 	}
 
@@ -5229,37 +5244,112 @@ tcu::TestCaseGroup* createSelectionControlGroup (tcu::TestContext& testCtx)
 	return group.release();
 }
 
-tcu::TestCaseGroup* createOpNameGroup(tcu::TestContext& testCtx)
+void getOpNameAbuseCases (vector<CaseParameter> &abuseCases)
+{
+	// Generate a long name.
+	std::string longname;
+	longname.resize(65535, 'k'); // max string literal, spir-v 2.17
+
+	// Some bad names, abusing utf-8 encoding. This may also cause problems
+	// with the logs.
+	// 1. Various illegal code points in utf-8
+	std::string utf8illegal =
+		"Illegal bytes in UTF-8: "
+		"\xc0 \xc1 \xf5 \xf6 \xf7 \xf8 \xf9 \xfa \xfb \xfc \xfd \xfe \xff"
+		"illegal surrogates: \xed\xad\xbf \xed\xbe\x80";
+
+	// 2. Zero encoded as overlong, not exactly legal but often supported to differentiate from terminating zero
+	std::string utf8nul = "UTF-8 encoded nul \xC0\x80 (should not end name)";
+
+	// 3. Some overlong encodings
+	std::string utf8overlong =
+		"UTF-8 overlong \xF0\x82\x82\xAC \xfc\x83\xbf\xbf\xbf\xbf \xf8\x87\xbf\xbf\xbf "
+		"\xf0\x8f\xbf\xbf";
+
+	// 4. Internet "zalgo" meme "bleeding text"
+	std::string utf8zalgo =
+		"\x56\xcc\xb5\xcc\x85\xcc\x94\xcc\x88\xcd\x8a\xcc\x91\xcc\x88\xcd\x91\xcc\x83\xcd\x82"
+		"\xcc\x83\xcd\x90\xcc\x8a\xcc\x92\xcc\x92\xcd\x8b\xcc\x94\xcd\x9d\xcc\x98\xcc\xab\xcc"
+		"\xae\xcc\xa9\xcc\xad\xcc\x97\xcc\xb0\x75\xcc\xb6\xcc\xbe\xcc\x80\xcc\x82\xcc\x84\xcd"
+		"\x84\xcc\x90\xcd\x86\xcc\x9a\xcd\x84\xcc\x9b\xcd\x86\xcd\x92\xcc\x9a\xcd\x99\xcd\x99"
+		"\xcc\xbb\xcc\x98\xcd\x8e\xcd\x88\xcd\x9a\xcc\xa6\xcc\x9c\xcc\xab\xcc\x99\xcd\x94\xcd"
+		"\x99\xcd\x95\xcc\xa5\xcc\xab\xcd\x89\x6c\xcc\xb8\xcc\x8e\xcc\x8b\xcc\x8b\xcc\x9a\xcc"
+		"\x8e\xcd\x9d\xcc\x80\xcc\xa1\xcc\xad\xcd\x9c\xcc\xba\xcc\x96\xcc\xb3\xcc\xa2\xcd\x8e"
+		"\xcc\xa2\xcd\x96\x6b\xcc\xb8\xcc\x84\xcd\x81\xcc\xbf\xcc\x8d\xcc\x89\xcc\x85\xcc\x92"
+		"\xcc\x84\xcc\x90\xcd\x81\xcc\x93\xcd\x90\xcd\x92\xcd\x9d\xcc\x84\xcd\x98\xcd\x9d\xcd"
+		"\xa0\xcd\x91\xcc\x94\xcc\xb9\xcd\x93\xcc\xa5\xcd\x87\xcc\xad\xcc\xa7\xcd\x96\xcd\x99"
+		"\xcc\x9d\xcc\xbc\xcd\x96\xcd\x93\xcc\x9d\xcc\x99\xcc\xa8\xcc\xb1\xcd\x85\xcc\xba\xcc"
+		"\xa7\x61\xcc\xb8\xcc\x8e\xcc\x81\xcd\x90\xcd\x84\xcd\x8c\xcc\x8c\xcc\x85\xcd\x86\xcc"
+		"\x84\xcd\x84\xcc\x90\xcc\x84\xcc\x8d\xcd\x99\xcd\x8d\xcc\xb0\xcc\xa3\xcc\xa6\xcd\x89"
+		"\xcd\x8d\xcd\x87\xcc\x98\xcd\x8d\xcc\xa4\xcd\x9a\xcd\x8e\xcc\xab\xcc\xb9\xcc\xac\xcc"
+		"\xa2\xcd\x87\xcc\xa0\xcc\xb3\xcd\x89\xcc\xb9\xcc\xa7\xcc\xa6\xcd\x89\xcd\x95\x6e\xcc"
+		"\xb8\xcd\x8a\xcc\x8a\xcd\x82\xcc\x9b\xcd\x81\xcd\x90\xcc\x85\xcc\x9b\xcd\x80\xcd\x91"
+		"\xcd\x9b\xcc\x81\xcd\x81\xcc\x9a\xcc\xb3\xcd\x9c\xcc\x9e\xcc\x9d\xcd\x99\xcc\xa2\xcd"
+		"\x93\xcd\x96\xcc\x97\xff";
+
+	// General name abuses
+	abuseCases.push_back(CaseParameter("_has_very_long_name", longname));
+	abuseCases.push_back(CaseParameter("_utf8_illegal", utf8illegal));
+	abuseCases.push_back(CaseParameter("_utf8_nul", utf8nul));
+	abuseCases.push_back(CaseParameter("_utf8_overlong", utf8overlong));
+	abuseCases.push_back(CaseParameter("_utf8_zalgo", utf8zalgo));
+
+	// GL keywords
+	abuseCases.push_back(CaseParameter("_is_gl_Position", "gl_Position"));
+	abuseCases.push_back(CaseParameter("_is_gl_InstanceID", "gl_InstanceID"));
+	abuseCases.push_back(CaseParameter("_is_gl_PrimitiveID", "gl_PrimitiveID"));
+	abuseCases.push_back(CaseParameter("_is_gl_TessCoord", "gl_TessCoord"));
+	abuseCases.push_back(CaseParameter("_is_gl_PerVertex", "gl_PerVertex"));
+	abuseCases.push_back(CaseParameter("_is_gl_InvocationID", "gl_InvocationID"));
+	abuseCases.push_back(CaseParameter("_is_gl_PointSize", "gl_PointSize"));
+	abuseCases.push_back(CaseParameter("_is_gl_PointCoord", "gl_PointCoord"));
+	abuseCases.push_back(CaseParameter("_is_gl_Layer", "gl_Layer"));
+	abuseCases.push_back(CaseParameter("_is_gl_FragDepth", "gl_FragDepth"));
+	abuseCases.push_back(CaseParameter("_is_gl_NumWorkGroups", "gl_NumWorkGroups"));
+	abuseCases.push_back(CaseParameter("_is_gl_WorkGroupID", "gl_WorkGroupID"));
+	abuseCases.push_back(CaseParameter("_is_gl_LocalInvocationID", "gl_LocalInvocationID"));
+	abuseCases.push_back(CaseParameter("_is_gl_GlobalInvocationID", "gl_GlobalInvocationID"));
+	abuseCases.push_back(CaseParameter("_is_gl_MaxVertexAttribs", "gl_MaxVertexAttribs"));
+	abuseCases.push_back(CaseParameter("_is_gl_MaxViewports", "gl_MaxViewports"));
+	abuseCases.push_back(CaseParameter("_is_gl_MaxComputeWorkGroupCount", "gl_MaxComputeWorkGroupCount"));
+	abuseCases.push_back(CaseParameter("_is_mat3", "mat3"));
+	abuseCases.push_back(CaseParameter("_is_volatile", "volatile"));
+	abuseCases.push_back(CaseParameter("_is_inout", "inout"));
+	abuseCases.push_back(CaseParameter("_is_isampler3d", "isampler3d"));
+}
+
+tcu::TestCaseGroup* createOpNameGroup (tcu::TestContext& testCtx)
 {
 	de::MovePtr<tcu::TestCaseGroup>	group			(new tcu::TestCaseGroup(testCtx, "opname", "Tests OpName cases"));
 	de::MovePtr<tcu::TestCaseGroup>	entryMainGroup	(new tcu::TestCaseGroup(testCtx, "entry_main", "OpName tests with entry main"));
 	de::MovePtr<tcu::TestCaseGroup>	entryNotGroup	(new tcu::TestCaseGroup(testCtx, "entry_rdc", "OpName tests with entry rdc"));
+	de::MovePtr<tcu::TestCaseGroup>	abuseGroup		(new tcu::TestCaseGroup(testCtx, "abuse", "OpName abuse tests"));
 	vector<CaseParameter>			cases;
+	vector<CaseParameter>			abuseCases;
 	vector<string>					testFunc;
 	de::Random						rnd				(deStringHash(group->getName()));
-	const int						numElements		= 100;
+	const int						numElements		= 128;
 	vector<float>					inputFloats		(numElements, 0);
 	vector<float>					outputFloats	(numElements, 0);
+
+	getOpNameAbuseCases(abuseCases);
 
 	fillRandomScalars(rnd, -100.0f, 100.0f, &inputFloats[0], numElements);
 
 	for(size_t ndx = 0; ndx < numElements; ++ndx)
 		outputFloats[ndx] = -inputFloats[ndx];
 
-	const StringTemplate shaderTemplate (
+	const string commonShaderHeader =
 		"OpCapability Shader\n"
 		"OpMemoryModel Logical GLSL450\n"
-		"OpEntryPoint GLCompute %main \"${ENTRY}\" %id\n"
-		"OpExecutionMode %main LocalSize 1 1 1\n"
+		"OpEntryPoint GLCompute %main \"main\" %id\n"
+		"OpExecutionMode %main LocalSize 1 1 1\n";
 
-		"OpName %${FUNC_ID} \"${NAME}\"\n"
-
+	const string commonShaderFooter =
 		"OpDecorate %id BuiltIn GlobalInvocationId\n"
 
 		+ string(getComputeAsmInputOutputBufferTraits())
-
 		+ string(getComputeAsmCommonTypes())
-
 		+ string(getComputeAsmInputOutputBuffer()) +
 
 		"%id        = OpVariable %uvec3ptr Input\n"
@@ -5283,13 +5373,126 @@ tcu::TestCaseGroup* createOpNameGroup(tcu::TestContext& testCtx)
 		"%outloc    = OpAccessChain %f32ptr %outdata %zero %x\n"
 		"             OpStore %outloc %neg\n"
 
-
 		"             OpReturn\n"
-		"             OpFunctionEnd\n");
+		"             OpFunctionEnd\n";
+
+	const StringTemplate shaderTemplate (
+		"OpCapability Shader\n"
+		"OpMemoryModel Logical GLSL450\n"
+		"OpEntryPoint GLCompute %main \"${ENTRY}\" %id\n"
+		"OpExecutionMode %main LocalSize 1 1 1\n"
+		"OpName %${ID} \"${NAME}\"\n" +
+		commonShaderFooter);
+
+	const std::string multipleNames =
+		commonShaderHeader +
+		"OpName %main \"to_be\"\n"
+		"OpName %id   \"or_not\"\n"
+		"OpName %main \"to_be\"\n"
+		"OpName %main \"makes_no\"\n"
+		"OpName %func \"difference\"\n"
+		"OpName %5    \"to_me\"\n" +
+		commonShaderFooter;
+
+	{
+		ComputeShaderSpec	spec;
+
+		spec.assembly		= multipleNames;
+		spec.numWorkGroups	= IVec3(numElements, 1, 1);
+		spec.inputs.push_back(BufferSp(new Float32Buffer(inputFloats)));
+		spec.outputs.push_back(BufferSp(new Float32Buffer(outputFloats)));
+
+		abuseGroup->addChild(new SpvAsmComputeShaderCase(testCtx, "main_has_multiple_names", "multiple_names", spec));
+	}
+
+	const std::string everythingNamed =
+		commonShaderHeader +
+		"OpName %main   \"name1\"\n"
+		"OpName %id     \"name2\"\n"
+		"OpName %zero   \"name3\"\n"
+		"OpName %entry  \"name4\"\n"
+		"OpName %func   \"name5\"\n"
+		"OpName %5      \"name6\"\n"
+		"OpName %7      \"name7\"\n"
+		"OpName %idval  \"name8\"\n"
+		"OpName %inloc  \"name9\"\n"
+		"OpName %inval  \"name10\"\n"
+		"OpName %neg    \"name11\"\n"
+		"OpName %outloc \"name12\"\n"+
+		commonShaderFooter;
+	{
+		ComputeShaderSpec	spec;
+
+		spec.assembly		= everythingNamed;
+		spec.numWorkGroups	= IVec3(numElements, 1, 1);
+		spec.inputs.push_back(BufferSp(new Float32Buffer(inputFloats)));
+		spec.outputs.push_back(BufferSp(new Float32Buffer(outputFloats)));
+
+		abuseGroup->addChild(new SpvAsmComputeShaderCase(testCtx, "everything_named", "everything_named", spec));
+	}
+
+	const std::string everythingNamedTheSame =
+		commonShaderHeader +
+		"OpName %main   \"the_same\"\n"
+		"OpName %id     \"the_same\"\n"
+		"OpName %zero   \"the_same\"\n"
+		"OpName %entry  \"the_same\"\n"
+		"OpName %func   \"the_same\"\n"
+		"OpName %5      \"the_same\"\n"
+		"OpName %7      \"the_same\"\n"
+		"OpName %idval  \"the_same\"\n"
+		"OpName %inloc  \"the_same\"\n"
+		"OpName %inval  \"the_same\"\n"
+		"OpName %neg    \"the_same\"\n"
+		"OpName %outloc \"the_same\"\n"+
+		commonShaderFooter;
+	{
+		ComputeShaderSpec	spec;
+
+		spec.assembly		= everythingNamedTheSame;
+		spec.numWorkGroups	= IVec3(numElements, 1, 1);
+		spec.inputs.push_back(BufferSp(new Float32Buffer(inputFloats)));
+		spec.outputs.push_back(BufferSp(new Float32Buffer(outputFloats)));
+
+		abuseGroup->addChild(new SpvAsmComputeShaderCase(testCtx, "everything_named_the_same", "everything_named_the_same", spec));
+	}
+
+	// main_is_...
+	for (size_t ndx = 0; ndx < abuseCases.size(); ++ndx)
+	{
+		map<string, string>	specializations;
+		ComputeShaderSpec	spec;
+
+		specializations["ENTRY"]	= "main";
+		specializations["ID"]		= "main";
+		specializations["NAME"]		= abuseCases[ndx].param;
+		spec.assembly				= shaderTemplate.specialize(specializations);
+		spec.numWorkGroups			= IVec3(numElements, 1, 1);
+		spec.inputs.push_back(BufferSp(new Float32Buffer(inputFloats)));
+		spec.outputs.push_back(BufferSp(new Float32Buffer(outputFloats)));
+
+		abuseGroup->addChild(new SpvAsmComputeShaderCase(testCtx, (std::string("main") + abuseCases[ndx].name).c_str(), abuseCases[ndx].name, spec));
+	}
+
+	// x_is_....
+	for (size_t ndx = 0; ndx < abuseCases.size(); ++ndx)
+	{
+		map<string, string>	specializations;
+		ComputeShaderSpec	spec;
+
+		specializations["ENTRY"]	= "main";
+		specializations["ID"]		= "x";
+		specializations["NAME"]		= abuseCases[ndx].param;
+		spec.assembly				= shaderTemplate.specialize(specializations);
+		spec.numWorkGroups			= IVec3(numElements, 1, 1);
+		spec.inputs.push_back(BufferSp(new Float32Buffer(inputFloats)));
+		spec.outputs.push_back(BufferSp(new Float32Buffer(outputFloats)));
+
+		abuseGroup->addChild(new SpvAsmComputeShaderCase(testCtx, (std::string("x") + abuseCases[ndx].name).c_str(), abuseCases[ndx].name, spec));
+	}
 
 	cases.push_back(CaseParameter("_is_main", "main"));
 	cases.push_back(CaseParameter("_is_not_main", "not_main"));
-
 	testFunc.push_back("main");
 	testFunc.push_back("func");
 
@@ -5297,14 +5500,14 @@ tcu::TestCaseGroup* createOpNameGroup(tcu::TestContext& testCtx)
 	{
 		for(size_t ndx = 0; ndx < cases.size(); ++ndx)
 		{
-			map<string, string>     specializations;
-			ComputeShaderSpec       spec;
+			map<string, string>	specializations;
+			ComputeShaderSpec	spec;
 
-			specializations["ENTRY"] = "main";
-			specializations["FUNC_ID"] = testFunc[fNdx];
-			specializations["NAME"] = cases[ndx].param;
-			spec.assembly = shaderTemplate.specialize(specializations);
-			spec.numWorkGroups = IVec3(numElements, 1, 1);
+			specializations["ENTRY"]	= "main";
+			specializations["ID"]		= testFunc[fNdx];
+			specializations["NAME"]		= cases[ndx].param;
+			spec.assembly				= shaderTemplate.specialize(specializations);
+			spec.numWorkGroups			= IVec3(numElements, 1, 1);
 			spec.inputs.push_back(BufferSp(new Float32Buffer(inputFloats)));
 			spec.outputs.push_back(BufferSp(new Float32Buffer(outputFloats)));
 
@@ -5321,14 +5524,14 @@ tcu::TestCaseGroup* createOpNameGroup(tcu::TestContext& testCtx)
 			map<string, string>     specializations;
 			ComputeShaderSpec       spec;
 
-			specializations["ENTRY"] = "rdc";
-			specializations["FUNC_ID"] = testFunc[fNdx];
-			specializations["NAME"] = cases[ndx].param;
-			spec.assembly = shaderTemplate.specialize(specializations);
-			spec.numWorkGroups = IVec3(numElements, 1, 1);
+			specializations["ENTRY"]	= "rdc";
+			specializations["ID"]		= testFunc[fNdx];
+			specializations["NAME"]		= cases[ndx].param;
+			spec.assembly				= shaderTemplate.specialize(specializations);
+			spec.numWorkGroups			= IVec3(numElements, 1, 1);
+			spec.entryPoint				= "rdc";
 			spec.inputs.push_back(BufferSp(new Float32Buffer(inputFloats)));
 			spec.outputs.push_back(BufferSp(new Float32Buffer(outputFloats)));
-			spec.entryPoint = "rdc";
 
 			entryNotGroup->addChild(new SpvAsmComputeShaderCase(testCtx, (testFunc[fNdx] + cases[ndx].name).c_str(), cases[ndx].name, spec));
 		}
@@ -5336,6 +5539,124 @@ tcu::TestCaseGroup* createOpNameGroup(tcu::TestContext& testCtx)
 
 	group->addChild(entryMainGroup.release());
 	group->addChild(entryNotGroup.release());
+	group->addChild(abuseGroup.release());
+
+	return group.release();
+}
+
+tcu::TestCaseGroup* createOpMemberNameGroup (tcu::TestContext& testCtx)
+{
+	de::MovePtr<tcu::TestCaseGroup>	group(new tcu::TestCaseGroup(testCtx, "opmembername", "Tests OpMemberName cases"));
+	de::MovePtr<tcu::TestCaseGroup>	abuseGroup(new tcu::TestCaseGroup(testCtx, "abuse", "OpMemberName abuse tests"));
+	vector<CaseParameter>			abuseCases;
+	vector<string>					testFunc;
+	de::Random						rnd(deStringHash(group->getName()));
+	const int						numElements = 128;
+	vector<float>					inputFloats(numElements, 0);
+	vector<float>					outputFloats(numElements, 0);
+
+	getOpNameAbuseCases(abuseCases);
+
+	fillRandomScalars(rnd, -100.0f, 100.0f, &inputFloats[0], numElements);
+
+	for (size_t ndx = 0; ndx < numElements; ++ndx)
+		outputFloats[ndx] = -inputFloats[ndx];
+
+	const string commonShaderHeader =
+		"OpCapability Shader\n"
+		"OpMemoryModel Logical GLSL450\n"
+		"OpEntryPoint GLCompute %main \"main\" %id\n"
+		"OpExecutionMode %main LocalSize 1 1 1\n";
+
+	const string commonShaderFooter =
+		"OpDecorate %id BuiltIn GlobalInvocationId\n"
+
+		+ string(getComputeAsmInputOutputBufferTraits())
+		+ string(getComputeAsmCommonTypes())
+		+ string(getComputeAsmInputOutputBuffer()) +
+
+		"%u3str     = OpTypeStruct %u32 %u32 %u32\n"
+
+		"%id        = OpVariable %uvec3ptr Input\n"
+		"%zero      = OpConstant %i32 0\n"
+
+		"%main      = OpFunction %void None %voidf\n"
+		"%entry     = OpLabel\n"
+
+		"%idval     = OpLoad %uvec3 %id\n"
+		"%x0        = OpCompositeExtract %u32 %idval 0\n"
+
+		"%idstr     = OpCompositeConstruct %u3str %x0 %x0 %x0\n"
+		"%x         = OpCompositeExtract %u32 %idstr 0\n"
+
+		"%inloc     = OpAccessChain %f32ptr %indata %zero %x\n"
+		"%inval     = OpLoad %f32 %inloc\n"
+		"%neg       = OpFNegate %f32 %inval\n"
+		"%outloc    = OpAccessChain %f32ptr %outdata %zero %x\n"
+		"             OpStore %outloc %neg\n"
+
+		"             OpReturn\n"
+		"             OpFunctionEnd\n";
+
+	const StringTemplate shaderTemplate(
+		commonShaderHeader +
+		"OpMemberName %u3str 0 \"${NAME}\"\n" +
+		commonShaderFooter);
+
+	const std::string multipleNames =
+		commonShaderHeader +
+		"OpMemberName %u3str 0 \"to_be\"\n"
+		"OpMemberName %u3str 1 \"or_not\"\n"
+		"OpMemberName %u3str 0 \"to_be\"\n"
+		"OpMemberName %u3str 2 \"makes_no\"\n"
+		"OpMemberName %u3str 0 \"difference\"\n"
+		"OpMemberName %u3str 0 \"to_me\"\n" +
+		commonShaderFooter;
+	{
+		ComputeShaderSpec	spec;
+
+		spec.assembly = multipleNames;
+		spec.numWorkGroups = IVec3(numElements, 1, 1);
+		spec.inputs.push_back(BufferSp(new Float32Buffer(inputFloats)));
+		spec.outputs.push_back(BufferSp(new Float32Buffer(outputFloats)));
+
+		abuseGroup->addChild(new SpvAsmComputeShaderCase(testCtx, "u3str_x_has_multiple_names", "multiple_names", spec));
+	}
+
+	const std::string everythingNamedTheSame =
+		commonShaderHeader +
+		"OpMemberName %u3str 0 \"the_same\"\n"
+		"OpMemberName %u3str 1 \"the_same\"\n"
+		"OpMemberName %u3str 2 \"the_same\"\n" +
+		commonShaderFooter;
+
+	{
+		ComputeShaderSpec	spec;
+
+		spec.assembly = everythingNamedTheSame;
+		spec.numWorkGroups = IVec3(numElements, 1, 1);
+		spec.inputs.push_back(BufferSp(new Float32Buffer(inputFloats)));
+		spec.outputs.push_back(BufferSp(new Float32Buffer(outputFloats)));
+
+		abuseGroup->addChild(new SpvAsmComputeShaderCase(testCtx, "everything_named_the_same", "everything_named_the_same", spec));
+	}
+
+	// u3str_x_is_....
+	for (size_t ndx = 0; ndx < abuseCases.size(); ++ndx)
+	{
+		map<string, string>	specializations;
+		ComputeShaderSpec	spec;
+
+		specializations["NAME"] = abuseCases[ndx].param;
+		spec.assembly = shaderTemplate.specialize(specializations);
+		spec.numWorkGroups = IVec3(numElements, 1, 1);
+		spec.inputs.push_back(BufferSp(new Float32Buffer(inputFloats)));
+		spec.outputs.push_back(BufferSp(new Float32Buffer(outputFloats)));
+
+		abuseGroup->addChild(new SpvAsmComputeShaderCase(testCtx, (std::string("u3str_x") + abuseCases[ndx].name).c_str(), abuseCases[ndx].name, spec));
+	}
+
+	group->addChild(abuseGroup.release());
 
 	return group.release();
 }
@@ -5671,78 +5992,17 @@ tcu::TestCaseGroup* createFloat16OpConstantCompositeGroup (tcu::TestContext& tes
 		spec.inputs.push_back(BufferSp(new Float32Buffer(positiveFloats)));
 		spec.outputs.push_back(BufferSp(new Float32Buffer(negativeFloats)));
 		spec.numWorkGroups = IVec3(numElements, 1, 1);
+
 		spec.extensions.push_back("VK_KHR_16bit_storage");
+		spec.extensions.push_back("VK_KHR_shader_float16_int8");
+
+		spec.requestedVulkanFeatures.ext16BitStorage = EXT16BITSTORAGEFEATURES_UNIFORM_BUFFER_BLOCK;
+		spec.requestedVulkanFeatures.extFloat16Int8 = EXTFLOAT16INT8FEATURES_FLOAT16;
 
 		group->addChild(new SpvAsmComputeShaderCase(testCtx, cases[caseNdx].name, cases[caseNdx].name, spec));
 	}
 
 	return group.release();
-}
-
-// IEEE-754 floating point numbers:
-// +--------+------+----------+-------------+
-// | binary | sign | exponent | significand |
-// +--------+------+----------+-------------+
-// | 16-bit |  1   |    5     |     10      |
-// +--------+------+----------+-------------+
-// | 32-bit |  1   |    8     |     23      |
-// +--------+------+----------+-------------+
-//
-// 16-bit floats:
-//
-// 0   000 00   00 0000 0001 (0x0001: 2e-24:         minimum positive denormalized)
-// 0   000 00   11 1111 1111 (0x03ff: 2e-14 - 2e-24: maximum positive denormalized)
-// 0   000 01   00 0000 0000 (0x0400: 2e-14:         minimum positive normalized)
-//
-// 0   000 00   00 0000 0000 (0x0000: +0)
-// 0   111 11   00 0000 0000 (0x7c00: +Inf)
-// 0   000 00   11 1111 0000 (0x03f0: +Denorm)
-// 0   000 01   00 0000 0001 (0x0401: +Norm)
-// 0   111 11   00 0000 1111 (0x7c0f: +SNaN)
-// 0   111 11   11 1111 0000 (0x7ff0: +QNaN)
-
-// Generate and return 16-bit floats and their corresponding 32-bit values.
-//
-// The first 14 number pairs are manually picked, while the rest are randomly generated.
-// Expected count to be at least 14 (numPicks).
-vector<deFloat16> getFloat16s (de::Random& rnd, deUint32 count)
-{
-	vector<deFloat16>	float16;
-
-	float16.reserve(count);
-
-	// Zero
-	float16.push_back(deUint16(0x0000));
-	float16.push_back(deUint16(0x8000));
-	// Infinity
-	float16.push_back(deUint16(0x7c00));
-	float16.push_back(deUint16(0xfc00));
-	// SNaN
-	float16.push_back(deUint16(0x7c0f));
-	float16.push_back(deUint16(0xfc0f));
-	// QNaN
-	float16.push_back(deUint16(0x7ff0));
-	float16.push_back(deUint16(0xfff0));
-
-	// Denormalized
-	float16.push_back(deUint16(0x03f0));
-	float16.push_back(deUint16(0x83f0));
-	// Normalized
-	float16.push_back(deUint16(0x0401));
-	float16.push_back(deUint16(0x8401));
-	// Some normal number
-	float16.push_back(deUint16(0x14cb));
-	float16.push_back(deUint16(0x94cb));
-
-	const deUint32		numPicks	= static_cast<deUint32>(float16.size());
-
-	DE_ASSERT(count >= numPicks);
-	count -= numPicks;
-
-	for (deUint32 numIdx = 0; numIdx < count; ++numIdx)
-		float16.push_back(rnd.getUint16());
-
-	return float16;
 }
 
 const vector<deFloat16> squarize(const vector<deFloat16>& inData, const deUint32 argNo)
@@ -6851,16 +7111,16 @@ tcu::TestCaseGroup* createSpecConstantTests (tcu::TestContext& testCtx)
 		map<string, string>			specializations;
 		map<string, string>			fragments;
 		SpecConstants				specConstants;
-		vector<string>				features;
 		PushConstants				noPushConstants;
 		GraphicsResources			noResources;
 		GraphicsInterfaces			noInterfaces;
-		std::vector<std::string>	noExtensions;
+		vector<string>				extensions;
+		VulkanFeatures				requiredFeatures;
 
 		// Special SPIR-V code for SConvert-case
 		if (strcmp(cases[caseNdx].caseName, "sconvert") == 0)
 		{
-			features.push_back("shaderInt16");
+			requiredFeatures.coreFeatures.shaderInt16 = VK_TRUE;
 			fragments["capability"]					= "OpCapability Int16\n";					// Adds 16-bit integer capability
 			specializations["OPTYPE_DEFINITIONS"]	= "%i16 = OpTypeInt 16 1\n";				// Adds 16-bit integer type
 			specializations["TYPE_CONVERT"]			= "%sc_op32 = OpSConvert %i32 %sc_op\n";	// Converts 16-bit integer to 32-bit integer
@@ -6869,7 +7129,7 @@ tcu::TestCaseGroup* createSpecConstantTests (tcu::TestContext& testCtx)
 		// Special SPIR-V code for FConvert-case
 		if (strcmp(cases[caseNdx].caseName, "fconvert") == 0)
 		{
-			features.push_back("shaderFloat64");
+			requiredFeatures.coreFeatures.shaderFloat64 = VK_TRUE;
 			fragments["capability"]					= "OpCapability Float64\n";					// Adds 64-bit float capability
 			specializations["OPTYPE_DEFINITIONS"]	= "%f64 = OpTypeFloat 64\n";				// Adds 64-bit float type
 			specializations["TYPE_CONVERT"]			= "%sc_op32 = OpConvertFToS %i32 %sc_op\n";	// Converts 64-bit float to 32-bit integer
@@ -6878,6 +7138,8 @@ tcu::TestCaseGroup* createSpecConstantTests (tcu::TestContext& testCtx)
 		// Special SPIR-V code for FConvert-case for 16-bit floats
 		if (strcmp(cases[caseNdx].caseName, "fconvert16") == 0)
 		{
+			extensions.push_back("VK_KHR_shader_float16_int8");
+			requiredFeatures.extFloat16Int8 = EXTFLOAT16INT8FEATURES_FLOAT16;
 			fragments["capability"]					= "OpCapability Float16\n";					// Adds 16-bit float capability
 			specializations["OPTYPE_DEFINITIONS"]	= "%f16 = OpTypeFloat 16\n";				// Adds 16-bit float type
 			specializations["TYPE_CONVERT"]			= "%sc_op32 = OpConvertFToS %i32 %sc_op\n";	// Converts 16-bit float to 32-bit integer
@@ -6898,7 +7160,7 @@ tcu::TestCaseGroup* createSpecConstantTests (tcu::TestContext& testCtx)
 
 		createTestsForAllStages(
 			cases[caseNdx].caseName, inputColors, cases[caseNdx].expectedColors, fragments, specConstants,
-			noPushConstants, noResources, noInterfaces, noExtensions, features, VulkanFeatures(), group.get());
+			noPushConstants, noResources, noInterfaces, extensions, requiredFeatures, group.get());
 	}
 
 	const char	decorations2[]			=
@@ -7832,20 +8094,69 @@ tcu::TestCaseGroup* createModuleTests(tcu::TestContext& testCtx)
 	RGBA								invertedColors[4];
 	de::MovePtr<tcu::TestCaseGroup>		moduleTests			(new tcu::TestCaseGroup(testCtx, "module", "Multiple entry points into shaders"));
 
-	const ShaderElement					combinedPipeline[]	=
-	{
-		ShaderElement("module", "main", VK_SHADER_STAGE_VERTEX_BIT),
-		ShaderElement("module", "main", VK_SHADER_STAGE_GEOMETRY_BIT),
-		ShaderElement("module", "main", VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT),
-		ShaderElement("module", "main", VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT),
-		ShaderElement("module", "main", VK_SHADER_STAGE_FRAGMENT_BIT)
-	};
-
 	getDefaultColors(defaultColors);
 	getInvertedDefaultColors(invertedColors);
-	addFunctionCaseWithPrograms<InstanceContext>(
-			moduleTests.get(), "same_module", "", createCombinedModule, runAndVerifyDefaultPipeline,
-			createInstanceContext(combinedPipeline, map<string, string>()));
+
+	// Combined module tests
+	{
+		// Shader stages: vertex and fragment
+		{
+			const ShaderElement combinedPipeline[]	=
+			{
+				ShaderElement("module", "main", VK_SHADER_STAGE_VERTEX_BIT),
+				ShaderElement("module", "main", VK_SHADER_STAGE_FRAGMENT_BIT)
+			};
+
+			addFunctionCaseWithPrograms<InstanceContext>(
+				moduleTests.get(), "same_module", "", createCombinedModule, runAndVerifyDefaultPipeline,
+				createInstanceContext(combinedPipeline, map<string, string>()));
+		}
+
+		// Shader stages: vertex, geometry and fragment
+		{
+			const ShaderElement combinedPipeline[]	=
+			{
+				ShaderElement("module", "main", VK_SHADER_STAGE_VERTEX_BIT),
+				ShaderElement("module", "main", VK_SHADER_STAGE_GEOMETRY_BIT),
+				ShaderElement("module", "main", VK_SHADER_STAGE_FRAGMENT_BIT)
+			};
+
+			addFunctionCaseWithPrograms<InstanceContext>(
+				moduleTests.get(), "same_module_geom", "", createCombinedModule, runAndVerifyDefaultPipeline,
+				createInstanceContext(combinedPipeline, map<string, string>()));
+		}
+
+		// Shader stages: vertex, tessellation control, tessellation evaluation and fragment
+		{
+			const ShaderElement combinedPipeline[]	=
+			{
+				ShaderElement("module", "main", VK_SHADER_STAGE_VERTEX_BIT),
+				ShaderElement("module", "main", VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT),
+				ShaderElement("module", "main", VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT),
+				ShaderElement("module", "main", VK_SHADER_STAGE_FRAGMENT_BIT)
+			};
+
+			addFunctionCaseWithPrograms<InstanceContext>(
+				moduleTests.get(), "same_module_tessc_tesse", "", createCombinedModule, runAndVerifyDefaultPipeline,
+				createInstanceContext(combinedPipeline, map<string, string>()));
+		}
+
+		// Shader stages: vertex, tessellation control, tessellation evaluation, geometry and fragment
+		{
+			const ShaderElement combinedPipeline[]	=
+			{
+				ShaderElement("module", "main", VK_SHADER_STAGE_VERTEX_BIT),
+				ShaderElement("module", "main", VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT),
+				ShaderElement("module", "main", VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT),
+				ShaderElement("module", "main", VK_SHADER_STAGE_GEOMETRY_BIT),
+				ShaderElement("module", "main", VK_SHADER_STAGE_FRAGMENT_BIT)
+			};
+
+			addFunctionCaseWithPrograms<InstanceContext>(
+				moduleTests.get(), "same_module_tessc_tesse_geom", "", createCombinedModule, runAndVerifyDefaultPipeline,
+				createInstanceContext(combinedPipeline, map<string, string>()));
+		}
+	}
 
 	const char* numbers[] =
 	{
@@ -8255,7 +8566,6 @@ tcu::TestCaseGroup* createBarrierTests(tcu::TestContext& testCtx)
 		"%then = OpLabel\n"
 		"OpControlBarrier %Workgroup %Workgroup %WorkgroupAcquireRelease\n"
 		"OpBranch %exit\n"
-
 		"%exit = OpLabel\n"
 		"%ret = OpPhi %v4f32 %param1 %then %wrong_branch_alert %else\n"
 		"OpReturnValue %ret\n"
@@ -8902,8 +9212,7 @@ struct ConvertCase
 
 		if (usesInt16(from, to) || usesFloat16(from, to))
 		{
-			caps += "OpCapability StorageUniformBufferBlock16\n"
-					"OpCapability StorageUniform16\n";
+			caps += "OpCapability StorageUniformBufferBlock16\n";
 			exts += "OpExtension \"SPV_KHR_16bit_storage\"\n";
 		}
 
@@ -9219,6 +9528,8 @@ void createConvertCases (vector<ConvertCase>& testCases, const string& instructi
 		testCases.push_back(ConvertCase(instruction,	DATA_TYPE_FLOAT_64,			DATA_TYPE_SIGNED_16,		0xc093480000000000,					true,	-1234));
 		testCases.push_back(ConvertCase(instruction,	DATA_TYPE_FLOAT_64,			DATA_TYPE_SIGNED_32,		0xc093480000000000,					true,	-1234));
 		testCases.push_back(ConvertCase(instruction,	DATA_TYPE_FLOAT_64,			DATA_TYPE_SIGNED_64,		0xc093480000000000,					true,	-1234));
+		testCases.push_back(ConvertCase(instruction,	DATA_TYPE_FLOAT_32,			DATA_TYPE_SIGNED_16,		0x453b9000,							true,	 3001,								"p3001"));
+		testCases.push_back(ConvertCase(instruction,	DATA_TYPE_FLOAT_32,			DATA_TYPE_SIGNED_16,		0xc53b9000,							true,	-3001,								"m3001"));
 	}
 	else if (instruction == "OpConvertSToF")
 	{
@@ -9349,7 +9660,6 @@ tcu::TestCaseGroup* createConvertGraphicsTests (tcu::TestContext& testCtx, const
 	for (vector<ConvertCase>::const_iterator test = testCases.begin(); test != testCases.end(); ++test)
 	{
 		map<string, string>	fragments		= getConvertCaseFragments(instruction, *test);
-		vector<string>		features;
 		VulkanFeatures		vulkanFeatures;
 		GraphicsResources	resources;
 		vector<string>		extensions;
@@ -9367,7 +9677,7 @@ tcu::TestCaseGroup* createConvertGraphicsTests (tcu::TestContext& testCtx, const
 
 		createTestsForAllStages(
 			test->m_name, defaultColors, defaultColors, fragments, noSpecConstants,
-			noPushConstants, resources, noInterfaces, extensions, features, vulkanFeatures, group.get());
+			noPushConstants, resources, noInterfaces, extensions, vulkanFeatures, group.get());
 	}
 	return group.release();
 }
@@ -9532,6 +9842,7 @@ tcu::TestCaseGroup* createOpConstantFloat16Tests(tcu::TestContext& testCtx)
 
 	extensions.push_back("VK_KHR_16bit_storage");
 	extensions.push_back("VK_KHR_shader_float16_int8");
+	features.extFloat16Int8 = EXTFLOAT16INT8FEATURES_FLOAT16;
 
 	for (size_t testNdx = 0; testNdx < sizeof(tests) / sizeof(NameConstantsCode); ++testNdx)
 	{
@@ -9600,7 +9911,9 @@ tcu::TestCaseGroup* createFloat16LogicalSet (tcu::TestContext& testCtx, const bo
 	de::MovePtr<tcu::TestCaseGroup>		testGroup			(new tcu::TestCaseGroup(testCtx, groupName.c_str(), "Float 16 logical tests"));
 
 	de::Random							rnd					(deStringHash(testGroup->getName()));
-	const StringTemplate				capabilities		("OpCapability ${cap}\n");
+	const string						spvCapabilities		= string("OpCapability StorageUniformBufferBlock16\n") + (nanSupported ? "OpCapability SignedZeroInfNanPreserve\n" : "");
+	const string						spvExtensions		= string("OpExtension \"SPV_KHR_16bit_storage\"\n") + (nanSupported ? "OpExtension \"SPV_KHR_float_controls\"\n" : "");
+	const string						spvExecutionMode	= nanSupported ? "OpExecutionMode %BP_main SignedZeroInfNanPreserve 16\n" : "";
 	const deUint32						numDataPoints		= 16;
 	const vector<deFloat16>				float16Data			= getFloat16s(rnd, numDataPoints);
 	const vector<deFloat16>				float16Data1		= squarize(float16Data, 0);
@@ -9724,14 +10037,14 @@ tcu::TestCaseGroup* createFloat16LogicalSet (tcu::TestContext& testCtx, const bo
 			map<string, string>	fragments;
 			vector<string>		extensions;
 
-			specs["cap"]				= "StorageUniformBufferBlock16";
 			specs["num_data_points"]	= de::toString(iterations);
 			specs["op_code"]			= testOp.opCode;
 			specs["op_arg1"]			= (testOp.argCount == 1) ? "" : "%val_src1";
 			specs["op_arg1_calc"]		= (testOp.argCount == 1) ? "" : arg1Calc.specialize(specs);
 
-			fragments["extension"]		= "OpExtension \"SPV_KHR_16bit_storage\"";
-			fragments["capability"]		= capabilities.specialize(specs);
+			fragments["extension"]		= spvExtensions;
+			fragments["capability"]		= spvCapabilities;
+			fragments["execution_mode"]	= spvExecutionMode;
 			fragments["decoration"]		= decoration.specialize(specs);
 			fragments["pre_main"]		= preMain.specialize(specs);
 			fragments["testfun"]		= testFun.specialize(specs);
@@ -9850,14 +10163,14 @@ tcu::TestCaseGroup* createFloat16LogicalSet (tcu::TestContext& testCtx, const bo
 			VulkanFeatures		features;
 			map<string, string>	fragments;
 
-			specs["cap"]				= "StorageUniformBufferBlock16";
 			specs["num_data_points"]	= de::toString(iterations);
 			specs["op_code"]			= testOp.opCode;
 			specs["op_arg1"]			= (testOp.argCount == 1) ? "" : "%val_src1";
 			specs["op_arg1_calc"]		= (testOp.argCount == 1) ? "" : arg1Calc.specialize(specs);
 
-			fragments["extension"]		= "OpExtension \"SPV_KHR_16bit_storage\"";
-			fragments["capability"]		= capabilities.specialize(specs);
+			fragments["extension"]		= spvExtensions;
+			fragments["capability"]		= spvCapabilities;
+			fragments["execution_mode"]	= spvExecutionMode;
 			fragments["decoration"]		= decoration.specialize(specs);
 			fragments["pre_main"]		= preMain.specialize(specs);
 			fragments["testfun"]		= testFun.specialize(specs);
@@ -10427,7 +10740,6 @@ tcu::TestCaseGroup* createDerivativeTests (tcu::TestContext& testCtx)
 		SpecConstants		noSpecConstants;
 		PushConstants		noPushConstants;
 		GraphicsInterfaces	noInterfaces;
-		vector<string>		noFeatures;
 
 		specs["op_code"]			= testOp.opCode;
 		specs["num_data_points"]	= de::toString(testOp.inputData.size() / N);
@@ -10453,7 +10765,7 @@ tcu::TestCaseGroup* createDerivativeTests (tcu::TestContext& testCtx)
 		features.ext16BitStorage	= EXT16BITSTORAGEFEATURES_UNIFORM_BUFFER_BLOCK;
 
 		createTestForStage(VK_SHADER_STAGE_FRAGMENT_BIT, testName.c_str(), defaultColors, defaultColors, fragments, noSpecConstants,
-							noPushConstants, specResource, noInterfaces, extensions, noFeatures, features, testGroup.get(), QP_TEST_RESULT_FAIL, string(), true);
+							noPushConstants, specResource, noInterfaces, extensions, features, testGroup.get(), QP_TEST_RESULT_FAIL, string(), true);
 	}
 
 	return testGroup.release();
@@ -17304,25 +17616,25 @@ tcu::TestCaseGroup* createOpNopTests (tcu::TestContext& testCtx)
 
 tcu::TestCaseGroup* createOpNameTests (tcu::TestContext& testCtx)
 {
-	de::MovePtr<tcu::TestCaseGroup>	testGroup (new tcu::TestCaseGroup(testCtx, "opname","Test OpName"));
+	de::MovePtr<tcu::TestCaseGroup>	testGroup	(new tcu::TestCaseGroup(testCtx, "opname","Test OpName"));
 	RGBA							defaultColors[4];
 	map<string, string>				opNameFragments;
 
 	getDefaultColors(defaultColors);
 
-	opNameFragments["debug"]		=
-		"OpName %BP_main \"not_main\"";
-
-	opNameFragments["testfun"]		=
-		"%test_code = OpFunction %v4f32 None %v4f32_v4f32_function\n"
-		"%param1 = OpFunctionParameter %v4f32\n"
+	opNameFragments["testfun"] =
+		"%test_code  = OpFunction %v4f32 None %v4f32_v4f32_function\n"
+		"%param1     = OpFunctionParameter %v4f32\n"
 		"%label_func = OpLabel\n"
-		"%a = OpVectorExtractDynamic %f32 %param1 %c_i32_0\n"
-		"%b = OpFAdd %f32 %a %a\n"
-		"%c = OpFSub %f32 %b %a\n"
-		"%ret = OpVectorInsertDynamic %v4f32 %param1 %c %c_i32_0\n"
+		"%a          = OpVectorExtractDynamic %f32 %param1 %c_i32_0\n"
+		"%b          = OpFAdd %f32 %a %a\n"
+		"%c          = OpFSub %f32 %b %a\n"
+		"%ret        = OpVectorInsertDynamic %v4f32 %param1 %c %c_i32_0\n"
 		"OpReturnValue %ret\n"
 		"OpFunctionEnd\n";
+
+	opNameFragments["debug"] =
+		"OpName %BP_main \"not_main\"";
 
 	createTestsForAllStages("opname", defaultColors, defaultColors, opNameFragments, testGroup.get());
 
@@ -17334,6 +17646,7 @@ tcu::TestCaseGroup* createFloat16Tests (tcu::TestContext& testCtx)
 	de::MovePtr<tcu::TestCaseGroup>		testGroup			(new tcu::TestCaseGroup(testCtx, "float16", "Float 16 tests"));
 
 	testGroup->addChild(createOpConstantFloat16Tests(testCtx));
+	testGroup->addChild(createFloat16LogicalSet<GraphicsResources>(testCtx, TEST_WITH_NAN));
 	testGroup->addChild(createFloat16LogicalSet<GraphicsResources>(testCtx, TEST_WITHOUT_NAN));
 	testGroup->addChild(createFloat16FuncSet<GraphicsResources>(testCtx));
 	testGroup->addChild(createDerivativeTests<256, 1>(testCtx));
@@ -17359,6 +17672,7 @@ tcu::TestCaseGroup* createFloat16Group (tcu::TestContext& testCtx)
 	de::MovePtr<tcu::TestCaseGroup>		testGroup			(new tcu::TestCaseGroup(testCtx, "float16", "Float 16 tests"));
 
 	testGroup->addChild(createFloat16OpConstantCompositeGroup(testCtx));
+	testGroup->addChild(createFloat16LogicalSet<ComputeShaderSpec>(testCtx, TEST_WITH_NAN));
 	testGroup->addChild(createFloat16LogicalSet<ComputeShaderSpec>(testCtx, TEST_WITHOUT_NAN));
 	testGroup->addChild(createFloat16FuncSet<ComputeShaderSpec>(testCtx));
 	testGroup->addChild(createFloat16VectorExtractSet<ComputeShaderSpec>(testCtx));
@@ -17376,6 +17690,362 @@ tcu::TestCaseGroup* createFloat16Group (tcu::TestContext& testCtx)
 	return testGroup.release();
 }
 
+tcu::TestCaseGroup* createBoolMixedBitSizeGroup (tcu::TestContext& testCtx)
+{
+	de::MovePtr<tcu::TestCaseGroup>	group			(new tcu::TestCaseGroup(testCtx, "mixed_bitsize", "Tests boolean operands produced from instructions of different bit-sizes"));
+
+	de::Random						rnd				(deStringHash(group->getName()));
+	const int		numElements		= 100;
+	vector<float>	inputData		(numElements, 0);
+	vector<float>	outputData		(numElements, 0);
+	fillRandomScalars(rnd, 0.0f, 100.0f, &inputData[0], 100);
+
+	const StringTemplate			shaderTemplate	(
+		"${CAPS}\n"
+		"OpMemoryModel Logical GLSL450\n"
+		"OpEntryPoint GLCompute %main \"main\" %id\n"
+		"OpExecutionMode %main LocalSize 1 1 1\n"
+		"OpSource GLSL 430\n"
+		"OpName %main           \"main\"\n"
+		"OpName %id             \"gl_GlobalInvocationID\"\n"
+
+		"OpDecorate %id BuiltIn GlobalInvocationId\n"
+
+		+ string(getComputeAsmInputOutputBufferTraits()) + string(getComputeAsmCommonTypes()) + string(getComputeAsmInputOutputBuffer()) +
+
+		"%id        = OpVariable %uvec3ptr Input\n"
+		"${CONST}\n"
+		"%main      = OpFunction %void None %voidf\n"
+		"%label     = OpLabel\n"
+		"%idval     = OpLoad %uvec3 %id\n"
+		"%x         = OpCompositeExtract %u32 %idval 0\n"
+		"%inloc     = OpAccessChain %f32ptr %indata %c0i32 %x\n"
+
+		"${TEST}\n"
+
+		"%outloc    = OpAccessChain %f32ptr %outdata %c0i32 %x\n"
+		"             OpStore %outloc %res\n"
+		"             OpReturn\n"
+		"             OpFunctionEnd\n"
+	);
+
+	// Each test case produces 4 boolean values, and we want each of these values
+	// to come froma different combination of the available bit-sizes, so compute
+	// all possible combinations here.
+	vector<deUint32>	widths;
+	widths.push_back(32);
+	widths.push_back(16);
+	widths.push_back(8);
+
+	vector<IVec4>	cases;
+	for (size_t width0 = 0; width0 < widths.size(); width0++)
+	{
+		for (size_t width1 = 0; width1 < widths.size(); width1++)
+		{
+			for (size_t width2 = 0; width2 < widths.size(); width2++)
+			{
+				for (size_t width3 = 0; width3 < widths.size(); width3++)
+				{
+					cases.push_back(IVec4(widths[width0], widths[width1], widths[width2], widths[width3]));
+				}
+			}
+		}
+	}
+
+	for (size_t caseNdx = 0; caseNdx < cases.size(); caseNdx++)
+	{
+		/// Skip cases where all bitsizes are the same, we are only interested in testing booleans produced from instructions with different native bit-sizes
+		if (cases[caseNdx][0] == cases[caseNdx][1] && cases[caseNdx][0] == cases[caseNdx][2] && cases[caseNdx][0] == cases[caseNdx][3])
+			continue;
+
+		map<string, string>	specializations;
+		ComputeShaderSpec	spec;
+
+		// Inject appropriate capabilities and reference constants depending
+		// on the bit-sizes required by this test case
+		bool hasFloat32	= cases[caseNdx][0] == 32 || cases[caseNdx][1] == 32 || cases[caseNdx][2] == 32 || cases[caseNdx][3] == 32;
+		bool hasFloat16	= cases[caseNdx][0] == 16 || cases[caseNdx][1] == 16 || cases[caseNdx][2] == 16 || cases[caseNdx][3] == 16;
+		bool hasInt8	= cases[caseNdx][0] == 8 || cases[caseNdx][1] == 8 || cases[caseNdx][2] == 8 || cases[caseNdx][3] == 8;
+
+		string capsStr	= "OpCapability Shader\n";
+		string constStr	=
+			"%c0i32     = OpConstant %i32 0\n"
+			"%c1f32     = OpConstant %f32 1.0\n"
+			"%c0f32     = OpConstant %f32 0.0\n";
+
+		if (hasFloat32)
+		{
+			constStr	+=
+				"%c10f32    = OpConstant %f32 10.0\n"
+				"%c25f32    = OpConstant %f32 25.0\n"
+				"%c50f32    = OpConstant %f32 50.0\n"
+				"%c90f32    = OpConstant %f32 90.0\n";
+		}
+
+		if (hasFloat16)
+		{
+			capsStr		+= "OpCapability Float16\n";
+			constStr	+=
+				"%f16       = OpTypeFloat 16\n"
+				"%c10f16    = OpConstant %f16 10.0\n"
+				"%c25f16    = OpConstant %f16 25.0\n"
+				"%c50f16    = OpConstant %f16 50.0\n"
+				"%c90f16    = OpConstant %f16 90.0\n";
+		}
+
+		if (hasInt8)
+		{
+			capsStr		+= "OpCapability Int8\n";
+			constStr	+=
+				"%i8        = OpTypeInt 8 1\n"
+				"%c10i8     = OpConstant %i8 10\n"
+				"%c25i8     = OpConstant %i8 25\n"
+				"%c50i8     = OpConstant %i8 50\n"
+				"%c90i8     = OpConstant %i8 90\n";
+		}
+
+		// Each invocation reads a different float32 value as input. Depending on
+		// the bit-sizes required by the particular test case, we also produce
+		// float16 and/or and int8 values by converting from the 32-bit float.
+		string testStr	= "";
+		testStr			+= "%inval32   = OpLoad %f32 %inloc\n";
+		if (hasFloat16)
+			testStr		+= "%inval16   = OpFConvert %f16 %inval32\n";
+		if (hasInt8)
+			testStr		+= "%inval8    = OpConvertFToS %i8 %inval32\n";
+
+		// Because conversions from Float to Int round towards 0 we want our "greater" comparisons to be >=,
+		// that way a float32/float16 comparison such as 50.6f >= 50.0f will preserve its result
+		// when converted to int8, since FtoS(50.6f) results in 50. For "less" comparisons, it is the
+		// other way around, so in this case we want < instead of <=.
+		if (cases[caseNdx][0] == 32)
+			testStr		+= "%cmp1      = OpFOrdGreaterThanEqual %bool %inval32 %c25f32\n";
+		else if (cases[caseNdx][0] == 16)
+			testStr		+= "%cmp1      = OpFOrdGreaterThanEqual %bool %inval16 %c25f16\n";
+		else
+			testStr		+= "%cmp1      = OpSGreaterThanEqual %bool %inval8 %c25i8\n";
+
+		if (cases[caseNdx][1] == 32)
+			testStr		+= "%cmp2      = OpFOrdLessThan %bool %inval32 %c50f32\n";
+		else if (cases[caseNdx][1] == 16)
+			testStr		+= "%cmp2      = OpFOrdLessThan %bool %inval16 %c50f16\n";
+		else
+			testStr		+= "%cmp2      = OpSLessThan %bool %inval8 %c50i8\n";
+
+		if (cases[caseNdx][2] == 32)
+			testStr		+= "%cmp3      = OpFOrdLessThan %bool %inval32 %c10f32\n";
+		else if (cases[caseNdx][2] == 16)
+			testStr		+= "%cmp3      = OpFOrdLessThan %bool %inval16 %c10f16\n";
+		else
+			testStr		+= "%cmp3      = OpSLessThan %bool %inval8 %c10i8\n";
+
+		if (cases[caseNdx][3] == 32)
+			testStr		+= "%cmp4      = OpFOrdGreaterThanEqual %bool %inval32 %c90f32\n";
+		else if (cases[caseNdx][3] == 16)
+			testStr		+= "%cmp4      = OpFOrdGreaterThanEqual %bool %inval16 %c90f16\n";
+		else
+			testStr		+= "%cmp4      = OpSGreaterThanEqual %bool %inval8 %c90i8\n";
+
+		testStr			+= "%and1      = OpLogicalAnd %bool %cmp1 %cmp2\n";
+		testStr			+= "%or1       = OpLogicalOr %bool %cmp3 %cmp4\n";
+		testStr			+= "%or2       = OpLogicalOr %bool %and1 %or1\n";
+		testStr			+= "%not1      = OpLogicalNot %bool %or2\n";
+		testStr			+= "%res       = OpSelect %f32 %not1 %c1f32 %c0f32\n";
+
+		specializations["CAPS"]		= capsStr;
+		specializations["CONST"]	= constStr;
+		specializations["TEST"]		= testStr;
+
+		// Compute expected result by evaluating the boolean expression computed in the shader for each input value
+		for (size_t ndx = 0; ndx < numElements; ++ndx)
+			outputData[ndx] = !((inputData[ndx] >= 25.0f && inputData[ndx] < 50.0f) || (inputData[ndx] < 10.0f || inputData[ndx] >= 90.0f));
+
+		spec.assembly = shaderTemplate.specialize(specializations);
+		spec.inputs.push_back(BufferSp(new Float32Buffer(inputData)));
+		spec.outputs.push_back(BufferSp(new Float32Buffer(outputData)));
+		spec.numWorkGroups = IVec3(numElements, 1, 1);
+		if (hasFloat16)
+			spec.requestedVulkanFeatures.extFloat16Int8 |= EXTFLOAT16INT8FEATURES_FLOAT16;
+		if (hasInt8)
+			spec.requestedVulkanFeatures.extFloat16Int8 |= EXTFLOAT16INT8FEATURES_INT8;
+		spec.extensions.push_back("VK_KHR_shader_float16_int8");
+
+		string testName = "b" + de::toString(cases[caseNdx][0]) + "b" + de::toString(cases[caseNdx][1]) + "b" + de::toString(cases[caseNdx][2]) + "b" + de::toString(cases[caseNdx][3]);
+		group->addChild(new SpvAsmComputeShaderCase(testCtx, testName.c_str(), "", spec));
+	}
+
+	return group.release();
+}
+
+tcu::TestCaseGroup* createBoolGroup (tcu::TestContext& testCtx)
+{
+	de::MovePtr<tcu::TestCaseGroup>		testGroup			(new tcu::TestCaseGroup(testCtx, "bool", "Boolean tests"));
+
+	testGroup->addChild(createBoolMixedBitSizeGroup(testCtx));
+
+	return testGroup.release();
+}
+
+tcu::TestCaseGroup* createOpNameAbuseTests (tcu::TestContext& testCtx)
+{
+	de::MovePtr<tcu::TestCaseGroup>	abuseGroup(new tcu::TestCaseGroup(testCtx, "opname_abuse", "OpName abuse tests"));
+	vector<CaseParameter>			abuseCases;
+	RGBA							defaultColors[4];
+	map<string, string>				opNameFragments;
+
+	getOpNameAbuseCases(abuseCases);
+	getDefaultColors(defaultColors);
+
+	opNameFragments["testfun"] =
+		"%test_code  = OpFunction %v4f32 None %v4f32_v4f32_function\n"
+		"%param1     = OpFunctionParameter %v4f32\n"
+		"%label_func = OpLabel\n"
+		"%a          = OpVectorExtractDynamic %f32 %param1 %c_i32_0\n"
+		"%b          = OpFAdd %f32 %a %a\n"
+		"%c          = OpFSub %f32 %b %a\n"
+		"%ret        = OpVectorInsertDynamic %v4f32 %param1 %c %c_i32_0\n"
+		"OpReturnValue %ret\n"
+		"OpFunctionEnd\n";
+
+	for (unsigned int i = 0; i < abuseCases.size(); i++)
+	{
+		string casename;
+		casename = string("main") + abuseCases[i].name;
+
+		opNameFragments["debug"] =
+			"OpName %BP_main \"" + abuseCases[i].param + "\"";
+
+		createTestsForAllStages(casename, defaultColors, defaultColors, opNameFragments, abuseGroup.get());
+	}
+
+	for (unsigned int i = 0; i < abuseCases.size(); i++)
+	{
+		string casename;
+		casename = string("b") + abuseCases[i].name;
+
+		opNameFragments["debug"] =
+			"OpName %b \"" + abuseCases[i].param + "\"";
+
+		createTestsForAllStages(casename, defaultColors, defaultColors, opNameFragments, abuseGroup.get());
+	}
+
+	{
+		opNameFragments["debug"] =
+			"OpName %test_code \"name1\"\n"
+			"OpName %param1    \"name2\"\n"
+			"OpName %a         \"name3\"\n"
+			"OpName %b         \"name4\"\n"
+			"OpName %c         \"name5\"\n"
+			"OpName %ret       \"name6\"\n";
+
+		createTestsForAllStages("everything_named", defaultColors, defaultColors, opNameFragments, abuseGroup.get());
+	}
+
+	{
+		opNameFragments["debug"] =
+			"OpName %test_code \"the_same\"\n"
+			"OpName %param1    \"the_same\"\n"
+			"OpName %a         \"the_same\"\n"
+			"OpName %b         \"the_same\"\n"
+			"OpName %c         \"the_same\"\n"
+			"OpName %ret       \"the_same\"\n";
+
+		createTestsForAllStages("everything_named_the_same", defaultColors, defaultColors, opNameFragments, abuseGroup.get());
+	}
+
+	{
+		opNameFragments["debug"] =
+			"OpName %BP_main \"to_be\"\n"
+			"OpName %BP_main \"or_not\"\n"
+			"OpName %BP_main \"to_be\"\n";
+
+		createTestsForAllStages("main_has_multiple_names", defaultColors, defaultColors, opNameFragments, abuseGroup.get());
+	}
+
+	{
+		opNameFragments["debug"] =
+			"OpName %b \"to_be\"\n"
+			"OpName %b \"or_not\"\n"
+			"OpName %b \"to_be\"\n";
+
+		createTestsForAllStages("b_has_multiple_names", defaultColors, defaultColors, opNameFragments, abuseGroup.get());
+	}
+
+	return abuseGroup.release();
+}
+
+
+tcu::TestCaseGroup* createOpMemberNameAbuseTests (tcu::TestContext& testCtx)
+{
+	de::MovePtr<tcu::TestCaseGroup>	abuseGroup(new tcu::TestCaseGroup(testCtx, "opmembername_abuse", "OpName abuse tests"));
+	vector<CaseParameter>			abuseCases;
+	RGBA							defaultColors[4];
+	map<string, string>				opMemberNameFragments;
+
+	getOpNameAbuseCases(abuseCases);
+	getDefaultColors(defaultColors);
+
+	opMemberNameFragments["pre_main"] =
+		"%f3str = OpTypeStruct %f32 %f32 %f32\n";
+
+	opMemberNameFragments["testfun"] =
+		"%test_code  = OpFunction %v4f32 None %v4f32_v4f32_function\n"
+		"%param1     = OpFunctionParameter %v4f32\n"
+		"%label_func = OpLabel\n"
+		"%a          = OpVectorExtractDynamic %f32 %param1 %c_i32_0\n"
+		"%b          = OpFAdd %f32 %a %a\n"
+		"%c          = OpFSub %f32 %b %a\n"
+		"%cstr       = OpCompositeConstruct %f3str %c %c %c\n"
+		"%d          = OpCompositeExtract %f32 %cstr 0\n"
+		"%ret        = OpVectorInsertDynamic %v4f32 %param1 %d %c_i32_0\n"
+		"OpReturnValue %ret\n"
+		"OpFunctionEnd\n";
+
+	for (unsigned int i = 0; i < abuseCases.size(); i++)
+	{
+		string casename;
+		casename = string("f3str_x") + abuseCases[i].name;
+
+		opMemberNameFragments["debug"] =
+			"OpMemberName %f3str 0 \"" + abuseCases[i].param + "\"";
+
+		createTestsForAllStages(casename, defaultColors, defaultColors, opMemberNameFragments, abuseGroup.get());
+	}
+
+	{
+		opMemberNameFragments["debug"] =
+			"OpMemberName %f3str 0 \"name1\"\n"
+			"OpMemberName %f3str 1 \"name2\"\n"
+			"OpMemberName %f3str 2 \"name3\"\n";
+
+		createTestsForAllStages("everything_named", defaultColors, defaultColors, opMemberNameFragments, abuseGroup.get());
+	}
+
+	{
+		opMemberNameFragments["debug"] =
+			"OpMemberName %f3str 0 \"the_same\"\n"
+			"OpMemberName %f3str 1 \"the_same\"\n"
+			"OpMemberName %f3str 2 \"the_same\"\n";
+
+		createTestsForAllStages("everything_named_the_same", defaultColors, defaultColors, opMemberNameFragments, abuseGroup.get());
+	}
+
+	{
+		opMemberNameFragments["debug"] =
+			"OpMemberName %f3str 0 \"to_be\"\n"
+			"OpMemberName %f3str 1 \"or_not\"\n"
+			"OpMemberName %f3str 0 \"to_be\"\n"
+			"OpMemberName %f3str 2 \"makes_no\"\n"
+			"OpMemberName %f3str 0 \"difference\"\n"
+			"OpMemberName %f3str 0 \"to_me\"\n";
+
+
+		createTestsForAllStages("f3str_x_has_multiple_names", defaultColors, defaultColors, opMemberNameFragments, abuseGroup.get());
+	}
+
+	return abuseGroup.release();
+}
+
 tcu::TestCaseGroup* createInstructionTests (tcu::TestContext& testCtx)
 {
 	const bool testComputePipeline = true;
@@ -17387,7 +18057,7 @@ tcu::TestCaseGroup* createInstructionTests (tcu::TestContext& testCtx)
 	computeTests->addChild(createSpivVersionCheckTests(testCtx, testComputePipeline));
 	computeTests->addChild(createLocalSizeGroup(testCtx));
 	computeTests->addChild(createOpNopGroup(testCtx));
-	computeTests->addChild(createOpFUnordGroup(testCtx));
+	computeTests->addChild(createOpFUnordGroup(testCtx, TEST_WITHOUT_NAN));
 	computeTests->addChild(createOpAtomicGroup(testCtx, false));
 	computeTests->addChild(createOpAtomicGroup(testCtx, true));					// Using new StorageBuffer decoration
 	computeTests->addChild(createOpAtomicGroup(testCtx, false, 1024, true));	// Return value validation
@@ -17445,14 +18115,18 @@ tcu::TestCaseGroup* createInstructionTests (tcu::TestContext& testCtx)
 	computeTests->addChild(create16BitStorageComputeGroup(testCtx));
 	computeTests->addChild(createFloatControlsComputeGroup(testCtx));
 	computeTests->addChild(createUboMatrixPaddingComputeGroup(testCtx));
+	computeTests->addChild(createCompositeInsertComputeGroup(testCtx));
 	computeTests->addChild(createVariableInitComputeGroup(testCtx));
 	computeTests->addChild(createConditionalBranchComputeGroup(testCtx));
 	computeTests->addChild(createIndexingComputeGroup(testCtx));
 	computeTests->addChild(createVariablePointersComputeGroup(testCtx));
 	computeTests->addChild(createImageSamplerComputeGroup(testCtx));
 	computeTests->addChild(createOpNameGroup(testCtx));
+	computeTests->addChild(createOpMemberNameGroup(testCtx));
 	computeTests->addChild(createPointerParameterComputeGroup(testCtx));
 	computeTests->addChild(createFloat16Group(testCtx));
+	computeTests->addChild(createBoolGroup(testCtx));
+	computeTests->addChild(createWorkgroupMemoryComputeGroup(testCtx));
 
 	graphicsTests->addChild(createCrossStageInterfaceTests(testCtx));
 	graphicsTests->addChild(createSpivVersionCheckTests(testCtx, !testComputePipeline));
@@ -17490,11 +18164,14 @@ tcu::TestCaseGroup* createInstructionTests (tcu::TestContext& testCtx)
 		graphicsTests->addChild(graphicsAndroidTests.release());
 	}
 	graphicsTests->addChild(createOpNameTests(testCtx));
+	graphicsTests->addChild(createOpNameAbuseTests(testCtx));
+	graphicsTests->addChild(createOpMemberNameAbuseTests(testCtx));
 
 	graphicsTests->addChild(create8BitStorageGraphicsGroup(testCtx));
 	graphicsTests->addChild(create16BitStorageGraphicsGroup(testCtx));
 	graphicsTests->addChild(createFloatControlsGraphicsGroup(testCtx));
 	graphicsTests->addChild(createUboMatrixPaddingGraphicsGroup(testCtx));
+	graphicsTests->addChild(createCompositeInsertGraphicsGroup(testCtx));
 	graphicsTests->addChild(createVariableInitGraphicsGroup(testCtx));
 	graphicsTests->addChild(createConditionalBranchGraphicsGroup(testCtx));
 	graphicsTests->addChild(createIndexingGraphicsGroup(testCtx));
@@ -17508,6 +18185,7 @@ tcu::TestCaseGroup* createInstructionTests (tcu::TestContext& testCtx)
 	graphicsTests->addChild(createConvertGraphicsTests(testCtx, "OpConvertUToF", "convertutof"));
 	graphicsTests->addChild(createConvertGraphicsTests(testCtx, "OpConvertFToU", "convertftou"));
 	graphicsTests->addChild(createPointerParameterGraphicsGroup(testCtx));
+	graphicsTests->addChild(createVaryingNameGraphicsGroup(testCtx));
 
 	graphicsTests->addChild(createFloat16Tests(testCtx));
 

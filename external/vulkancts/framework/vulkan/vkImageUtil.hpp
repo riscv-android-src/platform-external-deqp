@@ -63,10 +63,13 @@ VkSamplerAddressMode		mapWrapMode					(tcu::Sampler::WrapMode wrapMode);
 VkCompareOp					mapCompareMode				(tcu::Sampler::CompareMode mode);
 VkFormat					mapTextureFormat			(const tcu::TextureFormat& format);
 VkFormat					mapCompressedTextureFormat	(const tcu::CompressedTexFormat format);
-VkSamplerCreateInfo			mapSampler					(const tcu::Sampler& sampler, const tcu::TextureFormat& format, float minLod = 0.0f, float maxLod = 1000.0f);
+VkSamplerCreateInfo			mapSampler					(const tcu::Sampler& sampler, const tcu::TextureFormat& format, float minLod = 0.0f, float maxLod = 1000.0f, bool unnormal = false);
 
 void						imageUtilSelfTest			(void);
 
+float						getRepresentableDiffUnorm	(const VkFormat format, const deUint32 componentNdx);
+float						getRepresentableDiffSnorm	(const VkFormat format, const deUint32 componentNdx);
+deUint32					getFormatComponentWidth		(const VkFormat format, const deUint32 componentNdx);
 deUint32					getBlockSizeInBytes			(const VkFormat compressedFormat);
 deUint32					getBlockWidth				(const VkFormat compressedFormat);
 deUint32					getBlockHeight				(const VkFormat compressedFormat);
@@ -141,21 +144,48 @@ tcu::UVec3						alignedDivide					(const VkExtent3D&				extent,
 																 const VkExtent3D&				divisor);
 
 /*--------------------------------------------------------------------*//*!
- * Copies buffer data into an image.
+ * Copies buffer data into an image. The buffer is expected to be
+ * in a state after host write.
 *//*--------------------------------------------------------------------*/
 void							copyBufferToImage				(const DeviceInterface&						vk,
 																 vk::VkDevice								device,
 																 vk::VkQueue								queue,
 																 deUint32									queueFamilyIndex,
 																 const vk::VkBuffer&						buffer,
-																 deUint32									bufferSize,
+																 vk::VkDeviceSize							bufferSize,
 																 const std::vector<vk::VkBufferImageCopy>&	copyRegions,
 																 const vk::VkSemaphore*						waitSemaphore,
 																 vk::VkImageAspectFlags						imageAspectFlags,
 																 deUint32									mipLevels,
 																 deUint32									arrayLayers,
 																 vk::VkImage								destImage,
-																 VkImageLayout								destImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+																 VkImageLayout								destImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+																 VkPipelineStageFlags						destImageDstStageFlags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+void							copyBufferToImage				(const DeviceInterface&					vk,
+																 const VkCommandBuffer&					cmdBuffer,
+																 const VkBuffer&						buffer,
+																 vk::VkDeviceSize						bufferSize,
+																 const std::vector<VkBufferImageCopy>&	copyRegions,
+																 VkImageAspectFlags						imageAspectFlags,
+																 deUint32								mipLevels,
+																 deUint32								arrayLayers,
+																 VkImage								destImage,
+																 VkImageLayout							destImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+																 VkPipelineStageFlags					destImageDstStageFlags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+/*--------------------------------------------------------------------*//*!
+ * Copies image data into a buffer. The buffer is expected to be
+ * read by the host.
+*//*--------------------------------------------------------------------*/
+void							copyImageToBuffer				(const DeviceInterface&		vk,
+																 vk::VkCommandBuffer		cmdBuffer,
+																 vk::VkImage				image,
+																 vk::VkBuffer				buffer,
+																 tcu::IVec2					size,
+																 vk::VkAccessFlags			srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+																 vk::VkImageLayout			oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+																 deUint32					numLayers = 1u);
 
 /*--------------------------------------------------------------------*//*!
  * Checks if the physical device supports creation of the specified

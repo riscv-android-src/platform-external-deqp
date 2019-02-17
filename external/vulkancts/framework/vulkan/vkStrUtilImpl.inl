@@ -268,6 +268,9 @@ const char* getStructureTypeName (VkStructureType value)
 		case VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_FD_INFO_KHR:									return "VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_FD_INFO_KHR";
 		case VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR:										return "VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR";
 		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES_KHR:					return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES_KHR";
+		case VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_CONDITIONAL_RENDERING_INFO_EXT:		return "VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_CONDITIONAL_RENDERING_INFO_EXT";
+		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONDITIONAL_RENDERING_FEATURES_EXT:				return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CONDITIONAL_RENDERING_FEATURES_EXT";
+		case VK_STRUCTURE_TYPE_CONDITIONAL_RENDERING_BEGIN_INFO_EXT:							return "VK_STRUCTURE_TYPE_CONDITIONAL_RENDERING_BEGIN_INFO_EXT";
 		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT16_INT8_FEATURES_KHR:						return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT16_INT8_FEATURES_KHR";
 		case VK_STRUCTURE_TYPE_PRESENT_REGIONS_KHR:												return "VK_STRUCTURE_TYPE_PRESENT_REGIONS_KHR";
 		case VK_STRUCTURE_TYPE_OBJECT_TABLE_CREATE_INFO_NVX:									return "VK_STRUCTURE_TYPE_OBJECT_TABLE_CREATE_INFO_NVX";
@@ -342,12 +345,17 @@ const char* getStructureTypeName (VkStructureType value)
 		case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT:		return "VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT";
 		case VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_LAYOUT_SUPPORT_EXT:		return "VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_LAYOUT_SUPPORT_EXT";
 		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES_KHR:						return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES_KHR";
+		case VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT:								return "VK_STRUCTURE_TYPE_IMPORT_MEMORY_HOST_POINTER_INFO_EXT";
+		case VK_STRUCTURE_TYPE_MEMORY_HOST_POINTER_PROPERTIES_EXT:								return "VK_STRUCTURE_TYPE_MEMORY_HOST_POINTER_PROPERTIES_EXT";
+		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_MEMORY_HOST_PROPERTIES_EXT:				return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_MEMORY_HOST_PROPERTIES_EXT";
 		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES_KHR:				return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES_KHR";
 		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_PROPERTIES_EXT:			return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_PROPERTIES_EXT";
 		case VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_DIVISOR_STATE_CREATE_INFO_EXT:				return "VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_DIVISOR_STATE_CREATE_INFO_EXT";
 		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_FEATURES_EXT:			return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_FEATURES_EXT";
 		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES_KHR:							return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES_KHR";
 		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES_KHR:					return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES_KHR";
+		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_STENCIL_RESOLVE_PROPERTIES_KHR:			return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_STENCIL_RESOLVE_PROPERTIES_KHR";
+		case VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_DEPTH_STENCIL_RESOLVE_KHR:					return "VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_DEPTH_STENCIL_RESOLVE_KHR";
 		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES_KHR:				return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES_KHR";
 		case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES_EXT:				return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES_EXT";
 		default:																				return DE_NULL;
@@ -1546,6 +1554,7 @@ tcu::Format::Bitfield<32> getPipelineStageFlagsStr (VkPipelineStageFlags value)
 		tcu::Format::BitDesc(VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,					"VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT"),
 		tcu::Format::BitDesc(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,					"VK_PIPELINE_STAGE_ALL_COMMANDS_BIT"),
 		tcu::Format::BitDesc(VK_PIPELINE_STAGE_COMMAND_PROCESS_BIT_NVX,				"VK_PIPELINE_STAGE_COMMAND_PROCESS_BIT_NVX"),
+		tcu::Format::BitDesc(VK_PIPELINE_STAGE_CONDITIONAL_RENDERING_BIT_EXT,		"VK_PIPELINE_STAGE_CONDITIONAL_RENDERING_BIT_EXT"),
 	};
 	return tcu::Format::Bitfield<32>(value, DE_ARRAY_BEGIN(s_desc), DE_ARRAY_END(s_desc));
 }
@@ -1641,15 +1650,16 @@ tcu::Format::Bitfield<32> getBufferUsageFlagsStr (VkBufferUsageFlags value)
 {
 	static const tcu::Format::BitDesc s_desc[] =
 	{
-		tcu::Format::BitDesc(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,			"VK_BUFFER_USAGE_TRANSFER_SRC_BIT"),
-		tcu::Format::BitDesc(VK_BUFFER_USAGE_TRANSFER_DST_BIT,			"VK_BUFFER_USAGE_TRANSFER_DST_BIT"),
-		tcu::Format::BitDesc(VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT,	"VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT"),
-		tcu::Format::BitDesc(VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT,	"VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT"),
-		tcu::Format::BitDesc(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,		"VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT"),
-		tcu::Format::BitDesc(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,		"VK_BUFFER_USAGE_STORAGE_BUFFER_BIT"),
-		tcu::Format::BitDesc(VK_BUFFER_USAGE_INDEX_BUFFER_BIT,			"VK_BUFFER_USAGE_INDEX_BUFFER_BIT"),
-		tcu::Format::BitDesc(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,			"VK_BUFFER_USAGE_VERTEX_BUFFER_BIT"),
-		tcu::Format::BitDesc(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,		"VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT"),
+		tcu::Format::BitDesc(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,				"VK_BUFFER_USAGE_TRANSFER_SRC_BIT"),
+		tcu::Format::BitDesc(VK_BUFFER_USAGE_TRANSFER_DST_BIT,				"VK_BUFFER_USAGE_TRANSFER_DST_BIT"),
+		tcu::Format::BitDesc(VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT,		"VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT"),
+		tcu::Format::BitDesc(VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT,		"VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT"),
+		tcu::Format::BitDesc(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,			"VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT"),
+		tcu::Format::BitDesc(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,			"VK_BUFFER_USAGE_STORAGE_BUFFER_BIT"),
+		tcu::Format::BitDesc(VK_BUFFER_USAGE_INDEX_BUFFER_BIT,				"VK_BUFFER_USAGE_INDEX_BUFFER_BIT"),
+		tcu::Format::BitDesc(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,				"VK_BUFFER_USAGE_VERTEX_BUFFER_BIT"),
+		tcu::Format::BitDesc(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,			"VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT"),
+		tcu::Format::BitDesc(VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT,	"VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT"),
 	};
 	return tcu::Format::Bitfield<32>(value, DE_ARRAY_BEGIN(s_desc), DE_ARRAY_END(s_desc));
 }
@@ -1767,6 +1777,7 @@ tcu::Format::Bitfield<32> getAccessFlagsStr (VkAccessFlags value)
 		tcu::Format::BitDesc(VK_ACCESS_HOST_WRITE_BIT,								"VK_ACCESS_HOST_WRITE_BIT"),
 		tcu::Format::BitDesc(VK_ACCESS_MEMORY_READ_BIT,								"VK_ACCESS_MEMORY_READ_BIT"),
 		tcu::Format::BitDesc(VK_ACCESS_MEMORY_WRITE_BIT,							"VK_ACCESS_MEMORY_WRITE_BIT"),
+		tcu::Format::BitDesc(VK_ACCESS_CONDITIONAL_RENDERING_READ_BIT_EXT,			"VK_ACCESS_CONDITIONAL_RENDERING_READ_BIT_EXT"),
 		tcu::Format::BitDesc(VK_ACCESS_COMMAND_PROCESS_READ_BIT_NVX,				"VK_ACCESS_COMMAND_PROCESS_READ_BIT_NVX"),
 		tcu::Format::BitDesc(VK_ACCESS_COMMAND_PROCESS_WRITE_BIT_NVX,				"VK_ACCESS_COMMAND_PROCESS_WRITE_BIT_NVX"),
 		tcu::Format::BitDesc(VK_ACCESS_COLOR_ATTACHMENT_READ_NONCOHERENT_BIT_EXT,	"VK_ACCESS_COLOR_ATTACHMENT_READ_NONCOHERENT_BIT_EXT"),
@@ -1894,6 +1905,8 @@ tcu::Format::Bitfield<32> getExternalMemoryHandleTypeFlagsStr (VkExternalMemoryH
 		tcu::Format::BitDesc(VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_KMT_BIT,					"VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_KMT_BIT"),
 		tcu::Format::BitDesc(VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_HEAP_BIT,							"VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_HEAP_BIT"),
 		tcu::Format::BitDesc(VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,						"VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT"),
+		tcu::Format::BitDesc(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT,				"VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT"),
+		tcu::Format::BitDesc(VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_MAPPED_FOREIGN_MEMORY_BIT_EXT,		"VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_MAPPED_FOREIGN_MEMORY_BIT_EXT"),
 		tcu::Format::BitDesc(VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID,	"VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID"),
 	};
 	return tcu::Format::Bitfield<32>(value, DE_ARRAY_BEGIN(s_desc), DE_ARRAY_END(s_desc));
@@ -2037,6 +2050,19 @@ tcu::Format::Bitfield<32> getDisplayPlaneAlphaFlagsKHRStr (VkDisplayPlaneAlphaFl
 	return tcu::Format::Bitfield<32>(value, DE_ARRAY_BEGIN(s_desc), DE_ARRAY_END(s_desc));
 }
 
+tcu::Format::Bitfield<32> getResolveModeFlagsKHRStr (VkResolveModeFlagsKHR value)
+{
+	static const tcu::Format::BitDesc s_desc[] =
+	{
+		tcu::Format::BitDesc(VK_RESOLVE_MODE_NONE_KHR,				"VK_RESOLVE_MODE_NONE_KHR"),
+		tcu::Format::BitDesc(VK_RESOLVE_MODE_SAMPLE_ZERO_BIT_KHR,	"VK_RESOLVE_MODE_SAMPLE_ZERO_BIT_KHR"),
+		tcu::Format::BitDesc(VK_RESOLVE_MODE_AVERAGE_BIT_KHR,		"VK_RESOLVE_MODE_AVERAGE_BIT_KHR"),
+		tcu::Format::BitDesc(VK_RESOLVE_MODE_MIN_BIT_KHR,			"VK_RESOLVE_MODE_MIN_BIT_KHR"),
+		tcu::Format::BitDesc(VK_RESOLVE_MODE_MAX_BIT_KHR,			"VK_RESOLVE_MODE_MAX_BIT_KHR"),
+	};
+	return tcu::Format::Bitfield<32>(value, DE_ARRAY_BEGIN(s_desc), DE_ARRAY_END(s_desc));
+}
+
 tcu::Format::Bitfield<32> getDebugReportFlagsEXTStr (VkDebugReportFlagsEXT value)
 {
 	static const tcu::Format::BitDesc s_desc[] =
@@ -2069,6 +2095,15 @@ tcu::Format::Bitfield<32> getExternalMemoryFeatureFlagsNVStr (VkExternalMemoryFe
 		tcu::Format::BitDesc(VK_EXTERNAL_MEMORY_FEATURE_DEDICATED_ONLY_BIT_NV,	"VK_EXTERNAL_MEMORY_FEATURE_DEDICATED_ONLY_BIT_NV"),
 		tcu::Format::BitDesc(VK_EXTERNAL_MEMORY_FEATURE_EXPORTABLE_BIT_NV,		"VK_EXTERNAL_MEMORY_FEATURE_EXPORTABLE_BIT_NV"),
 		tcu::Format::BitDesc(VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT_NV,		"VK_EXTERNAL_MEMORY_FEATURE_IMPORTABLE_BIT_NV"),
+	};
+	return tcu::Format::Bitfield<32>(value, DE_ARRAY_BEGIN(s_desc), DE_ARRAY_END(s_desc));
+}
+
+tcu::Format::Bitfield<32> getConditionalRenderingFlagsEXTStr (VkConditionalRenderingFlagsEXT value)
+{
+	static const tcu::Format::BitDesc s_desc[] =
+	{
+		tcu::Format::BitDesc(VK_CONDITIONAL_RENDERING_INVERTED_BIT_EXT,	"VK_CONDITIONAL_RENDERING_INVERTED_BIT_EXT"),
 	};
 	return tcu::Format::Bitfield<32>(value, DE_ARRAY_BEGIN(s_desc), DE_ARRAY_END(s_desc));
 }
@@ -5439,6 +5474,31 @@ std::ostream& operator<< (std::ostream& s, const VkPhysicalDeviceFloatControlsPr
 	return s;
 }
 
+std::ostream& operator<< (std::ostream& s, const VkSubpassDescriptionDepthStencilResolveKHR& value)
+{
+	s << "VkSubpassDescriptionDepthStencilResolveKHR = {\n";
+	s << "\tsType = " << value.sType << '\n';
+	s << "\tpNext = " << value.pNext << '\n';
+	s << "\tdepthResolveMode = " << value.depthResolveMode << '\n';
+	s << "\tstencilResolveMode = " << value.stencilResolveMode << '\n';
+	s << "\tpDepthStencilResolveAttachment = " << value.pDepthStencilResolveAttachment << '\n';
+	s << '}';
+	return s;
+}
+
+std::ostream& operator<< (std::ostream& s, const VkPhysicalDeviceDepthStencilResolvePropertiesKHR& value)
+{
+	s << "VkPhysicalDeviceDepthStencilResolvePropertiesKHR = {\n";
+	s << "\tsType = " << value.sType << '\n';
+	s << "\tpNext = " << value.pNext << '\n';
+	s << "\tsupportedDepthResolveModes = " << getResolveModeFlagsKHRStr(value.supportedDepthResolveModes) << '\n';
+	s << "\tsupportedStencilResolveModes = " << getResolveModeFlagsKHRStr(value.supportedStencilResolveModes) << '\n';
+	s << "\tindependentResolveNone = " << value.independentResolveNone << '\n';
+	s << "\tindependentResolve = " << value.independentResolve << '\n';
+	s << '}';
+	return s;
+}
+
 std::ostream& operator<< (std::ostream& s, const VkDebugReportCallbackCreateInfoEXT& value)
 {
 	s << "VkDebugReportCallbackCreateInfoEXT = {\n";
@@ -5626,6 +5686,39 @@ std::ostream& operator<< (std::ostream& s, const VkViSurfaceCreateInfoNN& value)
 	s << "\tpNext = " << value.pNext << '\n';
 	s << "\tflags = " << getViSurfaceCreateFlagsNNStr(value.flags) << '\n';
 	s << "\twindow = " << value.window << '\n';
+	s << '}';
+	return s;
+}
+
+std::ostream& operator<< (std::ostream& s, const VkConditionalRenderingBeginInfoEXT& value)
+{
+	s << "VkConditionalRenderingBeginInfoEXT = {\n";
+	s << "\tsType = " << value.sType << '\n';
+	s << "\tpNext = " << value.pNext << '\n';
+	s << "\tbuffer = " << value.buffer << '\n';
+	s << "\toffset = " << value.offset << '\n';
+	s << "\tflags = " << getConditionalRenderingFlagsEXTStr(value.flags) << '\n';
+	s << '}';
+	return s;
+}
+
+std::ostream& operator<< (std::ostream& s, const VkPhysicalDeviceConditionalRenderingFeaturesEXT& value)
+{
+	s << "VkPhysicalDeviceConditionalRenderingFeaturesEXT = {\n";
+	s << "\tsType = " << value.sType << '\n';
+	s << "\tpNext = " << value.pNext << '\n';
+	s << "\tconditionalRendering = " << value.conditionalRendering << '\n';
+	s << "\tinheritedConditionalRendering = " << value.inheritedConditionalRendering << '\n';
+	s << '}';
+	return s;
+}
+
+std::ostream& operator<< (std::ostream& s, const VkCommandBufferInheritanceConditionalRenderingInfoEXT& value)
+{
+	s << "VkCommandBufferInheritanceConditionalRenderingInfoEXT = {\n";
+	s << "\tsType = " << value.sType << '\n';
+	s << "\tpNext = " << value.pNext << '\n';
+	s << "\tconditionalRenderingEnable = " << value.conditionalRenderingEnable << '\n';
 	s << '}';
 	return s;
 }
@@ -6282,6 +6375,78 @@ std::ostream& operator<< (std::ostream& s, const VkExternalFormatANDROID& value)
 	s << "\tsType = " << value.sType << '\n';
 	s << "\tpNext = " << value.pNext << '\n';
 	s << "\texternalFormat = " << value.externalFormat << '\n';
+	s << '}';
+	return s;
+}
+
+std::ostream& operator<< (std::ostream& s, const VkImportMemoryHostPointerInfoEXT& value)
+{
+	s << "VkImportMemoryHostPointerInfoEXT = {\n";
+	s << "\tsType = " << value.sType << '\n';
+	s << "\tpNext = " << value.pNext << '\n';
+	s << "\thandleType = " << value.handleType << '\n';
+	s << "\tpHostPointer = " << value.pHostPointer << '\n';
+	s << '}';
+	return s;
+}
+
+std::ostream& operator<< (std::ostream& s, const VkMemoryHostPointerPropertiesEXT& value)
+{
+	s << "VkMemoryHostPointerPropertiesEXT = {\n";
+	s << "\tsType = " << value.sType << '\n';
+	s << "\tpNext = " << value.pNext << '\n';
+	s << "\tmemoryTypeBits = " << value.memoryTypeBits << '\n';
+	s << '}';
+	return s;
+}
+
+std::ostream& operator<< (std::ostream& s, const VkPhysicalDeviceExternalMemoryHostPropertiesEXT& value)
+{
+	s << "VkPhysicalDeviceExternalMemoryHostPropertiesEXT = {\n";
+	s << "\tsType = " << value.sType << '\n';
+	s << "\tpNext = " << value.pNext << '\n';
+	s << "\tminImportedHostPointerAlignment = " << value.minImportedHostPointerAlignment << '\n';
+	s << '}';
+	return s;
+}
+
+std::ostream& operator<< (std::ostream& s, const VkPhysicalDeviceVertexAttributeDivisorPropertiesEXT& value)
+{
+	s << "VkPhysicalDeviceVertexAttributeDivisorPropertiesEXT = {\n";
+	s << "\tsType = " << value.sType << '\n';
+	s << "\tpNext = " << value.pNext << '\n';
+	s << "\tmaxVertexAttribDivisor = " << value.maxVertexAttribDivisor << '\n';
+	s << '}';
+	return s;
+}
+
+std::ostream& operator<< (std::ostream& s, const VkVertexInputBindingDivisorDescriptionEXT& value)
+{
+	s << "VkVertexInputBindingDivisorDescriptionEXT = {\n";
+	s << "\tbinding = " << value.binding << '\n';
+	s << "\tdivisor = " << value.divisor << '\n';
+	s << '}';
+	return s;
+}
+
+std::ostream& operator<< (std::ostream& s, const VkPipelineVertexInputDivisorStateCreateInfoEXT& value)
+{
+	s << "VkPipelineVertexInputDivisorStateCreateInfoEXT = {\n";
+	s << "\tsType = " << value.sType << '\n';
+	s << "\tpNext = " << value.pNext << '\n';
+	s << "\tvertexBindingDivisorCount = " << value.vertexBindingDivisorCount << '\n';
+	s << "\tpVertexBindingDivisors = " << value.pVertexBindingDivisors << '\n';
+	s << '}';
+	return s;
+}
+
+std::ostream& operator<< (std::ostream& s, const VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT& value)
+{
+	s << "VkPhysicalDeviceVertexAttributeDivisorFeaturesEXT = {\n";
+	s << "\tsType = " << value.sType << '\n';
+	s << "\tpNext = " << value.pNext << '\n';
+	s << "\tvertexAttributeInstanceRateDivisor = " << value.vertexAttributeInstanceRateDivisor << '\n';
+	s << "\tvertexAttributeInstanceRateZeroDivisor = " << value.vertexAttributeInstanceRateZeroDivisor << '\n';
 	s << '}';
 	return s;
 }
