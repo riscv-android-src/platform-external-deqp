@@ -706,6 +706,7 @@ void checkInstanceExtensions (tcu::ResultCollector& results, const vector<string
 		"VK_KHR_external_fence_capabilities",
 		"VK_KHR_device_group_creation",
 		"VK_KHR_get_display_properties2",
+		"VK_KHR_surface_protected_capabilities",
 	};
 
 	checkKhrExtensions(results, extensions, DE_LENGTH_OF_ARRAY(s_allowedInstanceKhrExtensions), s_allowedInstanceKhrExtensions);
@@ -2387,8 +2388,10 @@ VkImageCreateFlags getValidImageCreateFlags (const VkPhysicalDeviceFeatures& dev
 	{
 		flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
 
-		if (type == VK_IMAGE_TYPE_2D)
+		if (type == VK_IMAGE_TYPE_2D && !isYCbCrFormat(format))
+		{
 			flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+		}
 	}
 
 	if (isYCbCrFormat(format) && getPlaneCount(format) > 1)
