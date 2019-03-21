@@ -51,3 +51,10 @@ dEQP-EGL.functional.robustness.reset_context.shaders.out_of_bounds.reset_status.
 dEQP-EGL.functional.robustness.reset_context.shaders.out_of_bounds.reset_status.writes.local_array.compute
 dEQP-EGL.functional.robustness.reset_context.fixed_function_pipeline.reset_status.index_buffer_out_of_bounds
 dEQP-EGL.functional.robustness.reset_context.fixed_function_pipeline.reset_status.vertex_buffer_out_of_bounds
+
+# b/128983254
+dEQP-EGL.functional.fence_sync.*
+dEQP-EGL.functional.image.api.invalid_create_image
+dEQP-EGL.functional.create_surface.*
+dEQP-EGL.functional.get_proc_address.core.egl15
+dEQP-EGL.functional.reusable_sync.*
