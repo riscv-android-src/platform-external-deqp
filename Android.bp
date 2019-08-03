@@ -57,6 +57,7 @@ cc_library_shared {
         "-fwrapv",
         "-Wno-implicit-fallthrough",
         "-Wno-sign-conversion",
+        "-Wno-unused-private-field",
     ],
 
     sdk_version: "27",
