@@ -300,8 +300,8 @@ tcu::TestStatus AllocateFreeTestInstance::iterate (void)
 		deUint32				totalAllocateCount		= m_config.memoryAllocationCount;
 		VkResult				result					= vk::VK_SUCCESS;
 		// Because of the size limitation of protect heap, we ignore the "VK_ERROR_OUT_OF_DEVICE_MEMORY"
-		// when total number of protected memory reaches 100 times.
-		const deUint32			protectHeapLimit		= 100;
+		// when total number of protected memory reaches 80 times.
+		const deUint32			protectHeapLimit		= 80;
 
 
 		log << TestLog::Message << "Memory type index: " << m_memoryTypeIndex << TestLog::EndMessage;
