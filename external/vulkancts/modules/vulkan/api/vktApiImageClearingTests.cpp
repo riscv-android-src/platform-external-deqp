@@ -552,8 +552,8 @@ protected:
 	Unique<VkImage>						m_image;
 	de::MovePtr<Allocation>				m_imageMemory;
 	Unique<VkImageView>					m_imageView;
-	Unique<VkRenderPass>				m_renderPass;
-	Unique<VkFramebuffer>				m_frameBuffer;
+	Move<VkRenderPass>					m_renderPass;
+	Move<VkFramebuffer>					m_frameBuffer;
 };
 
 ImageClearingTestInstance::ImageClearingTestInstance (Context& context, const TestParams& params)
@@ -588,14 +588,18 @@ ImageClearingTestInstance::ImageClearingTestInstance (Context& context, const Te
 												 m_imageAspectFlags,
 												 params.imageViewLayerRange) : vk::Move<VkImageView>())
 
-	, m_renderPass				(m_isAttachmentFormat ? createRenderPass(params.imageFormat) : vk::Move<vk::VkRenderPass>())
-	, m_frameBuffer				(m_isAttachmentFormat ? createFrameBuffer(*m_imageView, *m_renderPass, params.imageExtent.width, params.imageExtent.height, params.imageViewLayerRange.layerCount) : vk::Move<vk::VkFramebuffer>())
 {
 	if (m_params.allocationKind == ALLOCATION_KIND_DEDICATED)
 		context.requireDeviceFunctionality("VK_KHR_dedicated_allocation");
 
 	if (m_params.separateDepthStencilLayoutMode != SEPARATE_DEPTH_STENCIL_LAYOUT_MODE_NONE)
 		context.requireDeviceFunctionality("VK_KHR_separate_depth_stencil_layouts");
+
+	if (m_isAttachmentFormat)
+	{
+		m_renderPass = createRenderPass(params.imageFormat);
+		m_frameBuffer = createFrameBuffer(*m_imageView, *m_renderPass, params.imageExtent.width, params.imageExtent.height, params.imageViewLayerRange.layerCount);
+	}
 }
 
 ImageClearingTestInstance::ViewType ImageClearingTestInstance::getViewType (deUint32 imageLayerCount) const
@@ -879,7 +883,7 @@ Move<VkRenderPass> ImageClearingTestInstance::createRenderPass (VkFormat format)
 		VkImageLayout								imageLayout;
 		VkAttachmentReferenceStencilLayoutKHR		stencilLayoutRef		=
 		{
-			VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_STENCIL_LAYOUT_KHR,
+			VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_STENCIL_LAYOUT_KHR,
 			DE_NULL,
 			VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 		};
@@ -897,7 +901,7 @@ Move<VkRenderPass> ImageClearingTestInstance::createRenderPass (VkFormat format)
 		{
 			initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			finalLayout = VK_IMAGE_LAYOUT_GENERAL;
-			stencilLayouts.stencilInitialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			stencilLayouts.stencilInitialLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL_KHR;
 			stencilLayouts.stencilFinalLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL_KHR;
 			imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 			stencilLayoutRef.stencilLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL_KHR;
@@ -959,7 +963,7 @@ Move<VkRenderPass> ImageClearingTestInstance::createRenderPass (VkFormat format)
 			DE_NULL,											// const deUint32*					pCorrelatedViewMasks;
 		};
 
-		return vk::createRenderPass2KHR(m_vkd, m_device, &renderPassCreateInfo, DE_NULL);
+		return vk::createRenderPass2(m_vkd, m_device, &renderPassCreateInfo, DE_NULL);
 	}
 }
 

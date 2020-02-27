@@ -390,7 +390,7 @@ TransformFeedbackTestInstance::TransformFeedbackTestInstance (Context& context, 
 	, m_parameters		(parameters)
 	, m_rnd				(0)
 {
-	const VkPhysicalDeviceTransformFeedbackFeaturesEXT&		transformFeedbackFeatures	= m_context.getTransformFeedbackFeatures();
+	const VkPhysicalDeviceTransformFeedbackFeaturesEXT&		transformFeedbackFeatures	= m_context.getTransformFeedbackFeaturesEXT();
 	VkPhysicalDeviceProperties2								deviceProperties2;
 
 	if (transformFeedbackFeatures.transformFeedback == DE_FALSE)
@@ -760,28 +760,37 @@ void TransformFeedbackTriangleStripWithAdjacencyTestInstance::verifyTransformFee
 	const deUint32			numPoints	= static_cast<deUint32>(bufBytes / sizeof(deUint32));
 	const deUint32*			tfData		= (deUint32*)bufAlloc->getHostPtr();
 
-	for (deUint32 dataNdx = 0; dataNdx < numPoints; ++dataNdx)
+	for (deUint32 dataNdx = 0; dataNdx + 2 < numPoints; dataNdx += 3)
 	{
 		const deUint32	i			= dataNdx / 3;
-		const deUint32	vertexNdx	= dataNdx % 3;
 		const bool		even		= (0 == i % 2);
-		deUint32		expected;
+		deUint32		vertexNumbers[3];
+		bool			correctWinding = false;
 
 		if (even)
 		{
-			const deUint32	vertexNumbers[3] = { 2 * i + 0, 2 * i + 2, 2 * i + 4 };
-
-			expected = vertexNumbers[vertexNdx];
+			vertexNumbers[0] = 2 * i + 0;
+			vertexNumbers[1] = 2 * i + 2;
+			vertexNumbers[2] = 2 * i + 4;
 		}
 		else
 		{
-			const deUint32	vertexNumbers[3] = { 2 * i + 0, 2 * i + 4, 2 * i + 2 };
-
-			expected = vertexNumbers[vertexNdx];
+			vertexNumbers[0] = 2 * i + 0;
+			vertexNumbers[1] = 2 * i + 4;
+			vertexNumbers[2] = 2 * i + 2;
 		}
 
-		if (tfData[dataNdx] != expected)
-			TCU_FAIL(std::string("Failed at item ") + de::toString(dataNdx) + " received:" + de::toString(tfData[dataNdx]) + " expected:" + de::toString(expected));
+		for (deUint32 j = 0; j < 3 && !correctWinding; j++)
+		{
+			correctWinding = (tfData[dataNdx] == vertexNumbers[j] && tfData[dataNdx + 1] == vertexNumbers[(j+1) % 3] && tfData[dataNdx + 2] == vertexNumbers[(j+2) % 3]);
+		}
+
+		if (!correctWinding)
+		{
+			TCU_FAIL(std::string("Failed at item ") + de::toString(dataNdx) +
+					" received: " + de::toString(tfData[dataNdx]) + "," + de::toString(tfData[dataNdx + 1]) + "," + de::toString(tfData[dataNdx + 2]) +
+					" expected: " + de::toString(vertexNumbers[0]) + "," + de::toString(vertexNumbers[1]) + "," + de::toString(vertexNumbers[2]) );
+		}
 	}
 }
 
@@ -911,7 +920,7 @@ TransformFeedbackMultistreamTestInstance::TransformFeedbackMultistreamTestInstan
 	const InstanceInterface&								vki							= m_context.getInstanceInterface();
 	const VkPhysicalDevice									physDevice					= m_context.getPhysicalDevice();
 	const VkPhysicalDeviceFeatures							features					= getPhysicalDeviceFeatures(vki, physDevice);
-	const VkPhysicalDeviceTransformFeedbackFeaturesEXT&		transformFeedbackFeatures	= m_context.getTransformFeedbackFeatures();
+	const VkPhysicalDeviceTransformFeedbackFeaturesEXT&		transformFeedbackFeatures	= m_context.getTransformFeedbackFeaturesEXT();
 	const deUint32											streamsSupported			= m_transformFeedbackProperties.maxTransformFeedbackStreams;
 	const deUint32											streamsRequired				= m_parameters.streamId + 1;
 	const deUint32											tfBuffersSupported			= m_transformFeedbackProperties.maxTransformFeedbackBuffers;
@@ -1045,7 +1054,7 @@ TransformFeedbackStreamsTestInstance::TransformFeedbackStreamsTestInstance (Cont
 	const InstanceInterface&								vki							= m_context.getInstanceInterface();
 	const VkPhysicalDevice									physDevice					= m_context.getPhysicalDevice();
 	const VkPhysicalDeviceFeatures							features					= getPhysicalDeviceFeatures(vki, physDevice);
-	const VkPhysicalDeviceTransformFeedbackFeaturesEXT&		transformFeedbackFeatures	= m_context.getTransformFeedbackFeatures();
+	const VkPhysicalDeviceTransformFeedbackFeaturesEXT&		transformFeedbackFeatures	= m_context.getTransformFeedbackFeaturesEXT();
 	const deUint32											streamsSupported			= m_transformFeedbackProperties.maxTransformFeedbackStreams;
 	const deUint32											streamsRequired				= m_parameters.streamId + 1;
 	const bool												geomPointSizeRequired		= m_parameters.testType == TEST_TYPE_STREAMS_POINTSIZE;
@@ -1467,14 +1476,14 @@ TransformFeedbackQueryTestInstance::TransformFeedbackQueryTestInstance (Context&
 	const InstanceInterface&								vki							= m_context.getInstanceInterface();
 	const VkPhysicalDevice									physDevice					= m_context.getPhysicalDevice();
 	const VkPhysicalDeviceFeatures							features					= getPhysicalDeviceFeatures(vki, physDevice);
-	const VkPhysicalDeviceTransformFeedbackFeaturesEXT&		transformFeedbackFeatures	= m_context.getTransformFeedbackFeatures();
+	const VkPhysicalDeviceTransformFeedbackFeaturesEXT&		transformFeedbackFeatures	= m_context.getTransformFeedbackFeaturesEXT();
 	const deUint32											streamsSupported			= m_transformFeedbackProperties.maxTransformFeedbackStreams;
 	const deUint32											streamsRequired				= m_parameters.streamId + 1;
 
 	if (!features.geometryShader)
 		TCU_THROW(NotSupportedError, "Missing feature: geometryShader");
 
-	if (transformFeedbackFeatures.geometryStreams == DE_FALSE)
+	if (streamsRequired > 1 && transformFeedbackFeatures.geometryStreams == DE_FALSE)
 		TCU_THROW(NotSupportedError, "geometryStreams feature is not supported");
 
 	if (streamsSupported < streamsRequired)
@@ -1607,7 +1616,7 @@ tcu::TestStatus TransformFeedbackQueryTestInstance::iterate (void)
 	endCommandBuffer(vk, *cmdBuffer);
 
 	if (m_parameters.testType == TEST_TYPE_QUERY_RESET)
-		vk.resetQueryPoolEXT(device, *queryPool, queryIndex, queryCountersNumber);
+		vk.resetQueryPool(device, *queryPool, queryIndex, queryCountersNumber);
 	submitCommandsAndWait(vk, device, queue, *cmdBuffer);
 
 	{
@@ -1666,7 +1675,7 @@ tcu::TestStatus TransformFeedbackQueryTestInstance::iterate (void)
 			queryResults->elements32[2] = 1u;	// Availability bit
 		}
 
-		vk.resetQueryPoolEXT(device, *queryPool, queryIndex, queryCountersNumber);
+		vk.resetQueryPool(device, *queryPool, queryIndex, queryCountersNumber);
 
 		vk::VkResult	res						= vk.getQueryPoolResults(device, *queryPool, queryIndex, queryCountersNumber, queryDataAvailSize, queryData.data(), queryDataAvailSize, (vk::VK_QUERY_RESULT_WITH_AVAILABILITY_BIT | queryExtraFlags));
 		const deUint64	numPrimitivesWritten	= (m_parameters.query64bits ? queryResults->elements64[0] : queryResults->elements32[0]);
@@ -2124,6 +2133,28 @@ void TransformFeedbackTestCase::initPrograms (SourceCollections& programCollecti
 		}
 
 		// geometry shader
+		if (m_parameters.streamId == 0)
+		{
+			std::ostringstream	src;
+
+			src << glu::getGLSLVersionDeclaration(glu::GLSL_VERSION_450) << "\n"
+				<< "\n"
+				<< "layout(points) in;\n"
+				<< "layout(location = 0) in vec4 in0[];\n"
+				<< "\n"
+				<< "layout(points, max_vertices = 1) out;\n"
+				<< "layout(xfb_buffer = 0, xfb_offset = 0, xfb_stride = 16, location = 0) out vec4 out0;\n"
+				<< "\n"
+				<< "void main(void)\n"
+				<< "{\n"
+				<< "    out0 = in0[0];\n"
+				<< "    EmitVertex();\n"
+				<< "    EndPrimitive();\n"
+				<< "}\n";
+
+			programCollection.glslSources.add("geom") << glu::GeometrySource(src.str());
+		}
+		else
 		{
 			const deUint32		s	= m_parameters.streamId;
 			std::ostringstream	src;
