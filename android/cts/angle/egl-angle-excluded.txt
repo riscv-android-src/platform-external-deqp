@@ -21,3 +21,10 @@ dEQP-EGL.functional.robustness.reset_context.shaders.infinite_loop.recover_from_
 dEQP-EGL.functional.robustness.reset_context.shaders.infinite_loop.recover_from_reset.fragment
 dEQP-EGL.functional.robustness.reset_context.shaders.infinite_loop.recover_from_reset.vertex_and_fragment
 dEQP-EGL.functional.robustness.reset_context.shaders.infinite_loop.recover_from_reset.compute
+
+# b/150978121
+dEQP-EGL.functional.get_frame_timestamps.rgb565_no_depth_no_stencil
+dEQP-EGL.functional.get_frame_timestamps.rgb565_depth_stencil
+dEQP-EGL.functional.get_frame_timestamps.rgba8888_no_depth_no_stencil
+dEQP-EGL.functional.get_frame_timestamps.rgba8888_depth_no_stencil
+dEQP-EGL.functional.get_frame_timestamps.rgba8888_depth_stencil

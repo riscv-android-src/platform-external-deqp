@@ -622,3 +622,14 @@ dEQP-GLES3.functional.texture.specification.texstorage3d.format#rgba16ui_3d
 dEQP-GLES3.functional.negative_api.buffer.read_pixels_fbo_format_mismatch
 dEQP-GLES3.functional.multisample.fbo_4_samples.stencil
 dEQP-GLES3.functional.multisample.fbo_max_samples.stencil
+
+# b/150978121
+dEQP-GLES3.functional.multisample.default_framebuffer.num_samples_polygon
+dEQP-GLES3.functional.multisample.default_framebuffer.num_samples_line
+dEQP-GLES3.functional.multisample.default_framebuffer.depth
+dEQP-GLES3.functional.multisample.fbo_4_samples.num_samples_polygon
+dEQP-GLES3.functional.multisample.fbo_4_samples.num_samples_line
+dEQP-GLES3.functional.multisample.fbo_4_samples.depth
+dEQP-GLES3.functional.multisample.fbo_max_samples.num_samples_polygon
+dEQP-GLES3.functional.multisample.fbo_max_samples.num_samples_line
+dEQP-GLES3.functional.multisample.fbo_max_samples.depth
