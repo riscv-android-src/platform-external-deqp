@@ -617,3 +617,8 @@ dEQP-GLES3.functional.texture.specification.texstorage3d.format#rgb16ui_3d
 dEQP-GLES3.functional.texture.specification.texstorage3d.format#rgba16f_3d
 dEQP-GLES3.functional.texture.specification.texstorage3d.format#rgba16i_3d
 dEQP-GLES3.functional.texture.specification.texstorage3d.format#rgba16ui_3d
+
+# b/150483224
+dEQP-GLES3.functional.negative_api.buffer.read_pixels_fbo_format_mismatch
+dEQP-GLES3.functional.multisample.fbo_4_samples.stencil
+dEQP-GLES3.functional.multisample.fbo_max_samples.stencil

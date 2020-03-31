@@ -8,3 +8,6 @@ dEQP-GLES2.functional.clipping.line.long_line_clip
 
 # anglebug.com/2808 -- b/118636566
 dEQP-GLES2.functional.shaders.builtin_variable.fragcoord_w
+
+# b/150483224
+dEQP-GLES2.functional.multisampled_render_to_texture.readpixels
