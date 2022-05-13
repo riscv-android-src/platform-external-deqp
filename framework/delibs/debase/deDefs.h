@@ -108,6 +108,7 @@
 #define DE_CPU_ARM_64	4
 #define DE_CPU_MIPS		5
 #define DE_CPU_MIPS_64	6
+#define DE_CPU_RISCV  7
 
 /* CPU detection. */
 #if defined(DE_CPU)
@@ -124,6 +125,8 @@
 #	define DE_CPU DE_CPU_MIPS
 #elif defined(__mips__) && ((__mips) == 64)
 #	define DE_CPU DE_CPU_MIPS_64
+#elif defined(__riscv)
+#	define DE_CPU DE_CPU_RISCV
 #else
 #	error Unknown CPU.
 #endif
@@ -346,7 +349,7 @@ DE_INLINE deBool deGetTrue (void) { return DE_TRUE; }
 /* Pointer size. */
 #if defined(DE_PTR_SIZE)
 	/* nada */
-#elif defined(_M_X64) || defined(__x86_64__) || defined(__amd64__) || defined(__aarch64__) || (defined(__mips) && ((__mips) == 64)) || defined(_LP64) || defined(__LP64__)
+#elif defined(_M_X64) || defined(__x86_64__) || defined(__amd64__) || defined(__aarch64__) || (defined(__mips) && ((__mips) == 64)) || defined(_LP64) || defined(__LP64__) || defined(__riscv)
 #	define DE_PTR_SIZE 8
 #else
 #	define DE_PTR_SIZE 4	/* default to 32-bit */
